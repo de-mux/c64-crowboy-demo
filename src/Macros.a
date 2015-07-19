@@ -1,0 +1,151 @@
+;	File :	Macros.a
+;
+;	Contains :	Commodore 64 macros
+;
+;
+; LEGEND:
+; mem    -    a memory address ($00-$FFFF)
+; zp     -    zero page memory address ($00-$FF)
+; or zeropage
+
+			;incw [zeropage1]
+	MAC incw	;increase a word stored in zero page
+	INC {1}
+	BNE .+4
+	INC {1}+1
+	ENDM
+	
+			; cmpw [mem1] [mem2]
+	MAC cmpw	;compare 2 words in memory. Only the zero flag indicates the result
+	LDA {1}	;		(not the negative flag)
+	SEC
+	SBC {2}
+	STA $FF
+	LDA {1}+1
+	SBC {2}+1
+	ORA $FF
+	ENDM
+
+;MATH
+;------------------------------------------
+	MAC add		; add [mem1] [mem2]
+	LDA {1}		; adds two locations together
+	CLC
+	ADC {2}
+	ENDM
+	
+	MAC sub		; sub [mem1] [mem2]
+	LDA {1}		; subtracts memory mem2 from memory
+	SEC		;    mem1
+	SBC {2}
+	ENDM
+
+;GRAPHICS
+;------------------------------------------
+;Character Graphics	
+	MAC print	; print [mem1]
+	LDA #<{1}
+	LDY #>{1}
+	JSR Screen_Print
+	ENDM
+
+;------------------------------------------	
+;Sprites
+			;spr_enable [0-7]
+	MAC spr_enable	;enables a sprite
+	temp SET 1
+	REPEAT {1}
+	temp SET <<temp
+	REPEND
+	LDA #temp
+	ORA $D015
+	ENDM
+	
+			;spr_enable_all
+	MAC spr_enable_all
+	LDA #$FF
+	STA $D015
+	ENDM
+	
+			;spr_disable [0-7]
+	MAC spr_disable
+	temp SET 1
+	REPEAT {1}
+	temp SET <<temp
+	REPEND
+	temp SET ~temp
+	LDA #temp
+	AND $D015
+	ENDM
+	
+			;spr_disable_all
+	MAC spr_disable_all
+	LDA #0
+	STA $D015
+	ENDM
+	
+			;spr_move [0-7] [X] [Y]
+	MAC spr_move	; will automatically set x-coord msb, but will not clear
+	LDA <{2}
+	STA $D000+{1}*2
+	LDA <{3}
+	STA $D001+{1}*2
+	IF {2}>$FF
+		temp SET 1
+		REPEAT {1}
+		temp SET <<temp
+		REPEND
+		ORA $D010
+	ENDIF
+	ENDM
+	
+	MAC spr_movex	;spr_movex [0-7] [X]
+	LDA <{2}	; will automatically set x-coord msb, but will not clear
+	STA $D000+{1}*2
+	IF {2}>$FF
+		temp SET 1
+		REPEAT {1}
+		temp SET <<temp
+		REPEND
+		ORA $D010
+	ENDIF
+	ENDM
+	
+	MAC spr_movey	;spr_movey [0-7] [Y]
+	LDA <{2}
+	STA $D001+{1}*2
+	ENDM
+
+; GAME ______________________________________
+	MAC set_mode	;set_mode [byte mode]
+	lda #{1}
+	sta Mode
+	ENDM
+	
+	MAC set_level	;set_level [byte level]
+	lda #<($5C00 + ({1}-1)*(128*9+2))
+	sta NextLevel
+	lda #>($5C00 + ({1}-1)*(128*9+2))
+	sta NextLevel+1
+	ENDM
+
+; SCREEN SHIT _______________________________
+	MAC set_interrupt
+	lda <{1}
+	sta $0314
+	lda >{1}
+	sta $0315
+	ENDM
+	
+	MAC set_interrupt_buf
+	lda <{1}
+	sta VProgramLoopInterrupt
+	lda >{1}
+	sta VProgramLoopInterrupt+1
+	ENDM
+	
+	MAC _print
+	lda <{1}
+	ldy >{1}
+	jsr Print
+	ENDM

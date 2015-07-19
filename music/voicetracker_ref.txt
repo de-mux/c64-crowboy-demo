@@ -1,0 +1,113 @@
+VoiceTracker Keys
+
+Main Keys:
+Run/Stop		- return to Main Menu
+Ctrl-1			- Editor
+Ctrl-2			- Instrument Editor
+Ctrl-3			- Macro Editor
+Shift-(A..I)	- Set tempo (1..9)
+F1				- Restart music
+F3				- Stop music
+F5				- Continue
+F7				- Fast forward
+Commodore-(1..3)- Track off
+
+Editor:
+Commodore-E		- Equalizer
+Commodore-P		- enter Player
+Shift-Return	- Track Edit
+
+Track Editor:
+Shift-7			- Clear
+Shift-8			- Copy
+Shift-9			- Paste
+
+xx-yz	xx-Pattern number
+		y -Transposition
+		z -Pattern repeats
+FF-FF	Restart current track
+FE-FF	Stop current track
+FD-xx	Jump to track position xx
+
+Note Durations:
+00 32nd note
+01 16th note
+03  8th note
+05  8th dotted
+07  quarter-note
+0B  quarter dotted
+0F  half-note
+1F  whole note
+
+INS.xx change instrument
+x-y.zz(.uu.vv) x-note value, y-octave
+		zz-duration
+		80+dur - filter
+		20+dur - portamento (use uu.vv)
+
+DEL.xx delay
+OFF.xx note off
+
+Instrument Editor:
+a    b    c    d    e    f    g    h
+0A   08   41   44   44   00   00   01
+
+a. Attack/Decay
+b. Sustain/Release
+c. Control Register
+	8x Noise waveform
+	4x Pulse waveform
+	2x Sawtooth waveform
+	1x Triangle waveform
+	x1 Gate on
+	x2 Sync Osc.2 w/ Osc.3
+	x4 Ring modulate
+	x8 Osc.3 off
+d. Pulse width ( for square wave )
+	1st nybble: fine adjustment
+	2nd nybble: bigger adjustment. x8-xF = negative
+e. Phaser depth ( for square wave )
+f.	1st nybble: delay before vibrato
+	2nd nybble: vibrato speed
+g.	vibrato depth
+h. First nybble:
+		0 Normal
+		1 Enable vibrato
+		2 Enable phaser(square)
+		4 Phaser 2(square)
+	Second nybble: Macro command
+	(defaults)
+		0 Normal
+		1 Drum sound
+		2 Normal
+		3 Percussive note
+		4 Arpeggio
+		5 Arpeggio
+		6 Arpeggio major
+		7 Percussive noise
+		8 Arpeggio 6th
+		9 Arpeggio major(same as 6)
+		A Percussive short note
+		B Arpeggio minor
+		C-F Quick blip
+		
+Example instruments:
+Fat drum 0fc9 09 0800 0 2 aa b e
+Bass Guitar 090e 09 44 40 22 40 5 (macro)
+	(macro): 41 0c 00 41 00 00 41 00 00 21 00 00
+			21 00 00 21 00 00 21 00 00 21 00 00 fe
+Snare:09a9 09 0800 0 0 00 0 (macro)
+	(macro): 81 df 00 11 a4 00 40 a9 00 80 df 00
+			80 ff 00 fe 
+	(filter):80.c8.ff
+Plucky:0303 21 01 00 01 00 10
+	(filter):80.80.01
+Electric Piano: 09AD 41 41 20 92 11 50
+	(filter):80.80.01
+
+
+Macrocommands:
+XX,YY,ZZ	XX - wave form
+			YY - transposition
+			ZZ - filter parameter
+

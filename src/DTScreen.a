@@ -1,0 +1,272 @@
+; "Downtown"
+;(c) 2002 by Eric Odland
+;
+; File : DTScreen.a
+;
+; Contains : General Screen subroutines
+;
+;
+; ZeroPage locations used:
+;	
+
+;Colors
+black		EQU 0
+white		EQU 1
+red		EQU 2
+cyan		EQU 3
+purple		EQU 4
+green		EQU 5
+blue		EQU 6
+yellow		EQU 7
+orange		EQU 8
+brown		EQU 9
+lred		EQU 10
+grey1		EQU 11
+grey2		EQU 12
+lgreen		EQU 13
+lblue		EQU 14
+grey3		EQU 15
+
+;IRQ Screen Update Compare
+SUCompare	EQU 250
+;IRQ ModeJump Compare Raster Line
+MJCompare		EQU 100
+;IRQ MainMenu Compare
+MMCompare	EQU 255
+
+
+	
+	
+	
+; ******************* ClearScreen *******************
+;
+; Purpose: 		Clear the current screen
+;
+; Registers used: 	.A, .X
+;
+; How to use:
+;	Call this routine.
+;
+ClearScreen 	subroutine
+	lda VICMEM	; what screen are we on?
+	and #%11110000
+	lsr
+	lsr
+	tax
+	stx .1+2
+	inx
+	stx .2+2
+	inx
+	stx .3+2
+	stx .4+2
+	
+	ldx #0
+	lda #SpaceBar
+.1	sta $0400,x
+.2	sta $0500,x
+.3	sta $0600,x
+.4	sta $06E9,x
+	dex
+	bne .1
+	lda #$04	; reset cursor to top of screen memory
+	stx CursorPos
+	sta CursorPos+1
+	lda #$D8	; reset corresponding color memory
+	stx ColorPos
+	sta ColorPos+1
+	rts
+
+; ******************* ClearColors *******************
+;
+; Purpose: 		Clear color memory from $D800-$D8E8
+;
+; Registers used: 	.A, .X
+;
+; How to use:
+;	Call this routine.
+;	
+ClearColors	subroutine
+	ldx #0
+	txa
+.1	sta $D800,x
+	sta $D900,x
+	sta $DA00,x
+	sta $DAE9,x
+	dex
+	bne .1
+	rts
+	
+; ******************* SMPlot *******************
+;
+; Purpose: 		plot cursor at specified row/position
+;
+; Registers used: 	.A, .X, .Y
+;
+; Memory used:		CursorPos (ZP)
+;
+; How to use:
+;	Load .X/.Y with row/column of desired position
+;	Call this routine.
+;
+SMPlot	subroutine
+	lda #$04	; reset cursor and color pos to top-left
+	sta CursorPos+1
+	lda #$D8
+	sta ColorPos+1
+	lda #$00
+	sta CursorPos
+	sta ColorPos
+.1	dex	; find screen position of row .X
+	bmi .2
+	clc
+	adc #40
+	bcc .1
+	inc CursorPos+1
+	inc ColorPos+1
+	bcs .1	; branch always
+.2	sta CursorPos	; add column .Y to cursor/color locations
+	sta ColorPos
+	tya
+	clc
+	adc CursorPos
+	bcc .3
+	inc CursorPos+1
+	inc ColorPos+1
+.3	sta CursorPos
+	sta ColorPos
+	rts
+
+
+; ******************* SetCursorColor *******************
+;
+; Purpose: 		set character color
+;
+; Registers used: 	.A
+;
+; Memory used:		CursorColor
+;
+; How to use:
+;	Load .A with desired color. Call this routine.
+;
+SetCursorColor	subroutine
+	sta CursorColor
+	rts	
+
+
+; ******************* ScreenUpdate *******************
+;
+; Purpose: 		update the screen
+;
+; Registers used: 	.A, .X, .Y
+;
+; Memory Used:		Temp, Temp+1, Temp2
+;
+; How to use:
+;	Set IRQ vector to point here
+;	Load .A with the first character.
+;	Load .X with the width in chars.
+;	Load .Y with the height.
+;	
+ScreenUpdate	subroutine
+	;ldy #39 
+	;inc $d020
+	;inc $d020
+	
+	
+	; Copy offscreen color info to color memory
+	;This ugly looking piece is simply an unrolled loop, for ultra-fast
+	;  processing
+	ldy #39				; for 40 screen columns
+.1	lda OffscreenColor,y		; 4
+	sta COLORMEM,y			; 4-5
+	lda OffscreenColor+40,y		; 4
+	sta COLORMEM+40,y		; 4-5 
+	lda OffscreenColor+40*2,y	; 4
+	sta COLORMEM+40*2,y		; 4-5
+	lda OffscreenColor+40*3,y 	; 4
+	sta COLORMEM+40*3,y		; 4-5
+	lda OffscreenColor+40*4,y 	; 4
+	sta COLORMEM+40*4,y		; 4-5
+	lda OffscreenColor+40*5,y	; 4
+	sta COLORMEM+40*5,y		; 4-5
+	lda OffscreenColor+40*6,y 	; 4
+	sta COLORMEM+40*6,y		; 4-5
+	lda OffscreenColor+40*7,y	; 4
+	sta COLORMEM+40*7,y		; 4-5
+	lda OffscreenColor+40*8,y	; 4
+	sta COLORMEM+40*8,y		; 4-5
+	lda OffscreenColor+40*9,y	; 4
+	sta COLORMEM+40*9,y		; 4-5 
+	lda OffscreenColor+40*10,y	; 4
+	sta COLORMEM+40*10,y		; 4-5
+	lda OffscreenColor+40*11,y	; 4
+	sta COLORMEM+40*11,y		; 4-5
+	lda OffscreenColor+40*12,y 	; 4
+	sta COLORMEM+40*12,y		; 4-5
+	lda OffscreenColor+40*13,y 	; 4
+	sta COLORMEM+40*13,y		; 4-5
+	lda OffscreenColor+40*14,y 	; 4
+	sta COLORMEM+40*14,y		; 4-5
+	lda OffscreenColor+40*15,y 	; 4
+	sta COLORMEM+40*15,y		; 4-5
+	lda OffscreenColor+40*16,y 	; 4
+	sta COLORMEM+40*16,y		; 4-5
+	lda OffscreenColor+40*17,y	 ; 4
+	sta COLORMEM+40*17,y		; 4-5
+	
+	dey
+	bpl .1
+	
+	;   scroll screen to fine X dot position
+	; scanline moving into play area view, set scroll
+	lda $D016	; vic control register
+	and #%11111000	; clear low 3 bits
+	ora FineScroll	; set low 3 bits to scroll value
+	sta $D016
+	
+	; perform page-flip
+	jsr PageFlip
+	
+	; copy sprite pointers to screen memory
+	ldx #$07		; if page=1, use screen $0400
+	lda Page		; if page=0, use screen $2F00
+	bne .usp1		
+	ldx #$2F
+.usp1	stx .spr+2
+	ldx #$F8
+	stx .spr+1
+	ldx #7			; copy
+.usp2	lda o_info,x		; carry = facing bit
+	lsr
+	lsr
+	lda S_spriteDataPtr,x
+	adc #0			; add carry to .A (facing bit)
+.spr	sta $FFFF,x
+	dex
+	bpl .usp2
+	
+	; position sprites
+	ldx #16			; the 16th index is the sprite X MSBs
+.ps1	lda S_XYPos,x
+	sta $D000,x
+	dex
+	bpl .ps1
+	
+	; enable/disable sprites
+	lda S_enable
+	sta $D015
+	
+	
+	; set interrupt back to ModeJump
+	lda #MJCompare
+	sta $D012
+	set_interrupt #ModeJump
+	jmp ModeExit
+	
+	
+	
+;PrepareNextInterrupt	subroutine
+;	set_interrupt VProgramLoopInterrupt
+;	lda NextIRQCompare
+;	sta $D012
+;	rts

@@ -1,0 +1,112 @@
+;   System declarations (no code in this file)
+; ===================================================================
+
+; Processor memory locations
+PROCESSOR_PORT = $1
+
+; Special memory sections
+BASICSTART = $0801
+SCREENMEM  = $0400
+BASICROM   = $A000
+VIC        = $D000
+SID        = $D400
+COLORMEM   = $D800
+CIA1       = $DC00
+CIA2       = $DD00
+KERNALROM  = $E000
+
+; Sprites
+SPRDATA    = $07F8  ;sprite data pointers
+SPR0X      = $D000  ;sprite 0-7 x and y positions
+SPR0Y      = $D001
+SPR1X      = $D002
+SPR1Y      = $D003
+SPR2X      = $D004
+SPR2Y      = $D005
+SPR3X      = $D006
+SPR3Y      = $D007
+SPR4X      = $D008
+SPR4Y      = $D009
+SPR5X      = $D00A
+SPR5Y      = $D00B
+SPR6X      = $D00C
+SPR6Y      = $D00D
+SPR7X      = $D00E
+SPR7Y      = $D00F
+SPRMSB     = $D010  ;sprites 0-7 msb of x position
+VIC1       = $D011  ;VIC control register (raster, extended color text, bmap mode, blank screen,
+                    ;  24/25 row text, smooth scroll Y pos)
+IRQ        = $D012  ;read/Write IRQ
+LPX        = $D013  ;light-Pen X Pos
+LPY        = $D014  ;light-Pen Y Pos
+SPRDISP    = $D015  ;sprites 0-7 display enable (1=enable)
+VIC2       = $D016  ;VIC control register (Multi-color, 38/40 column, smooth scroll X pos)
+SPRV       = $D017  ;sprites 0-7 expand vertical
+VICMEM     = $D018  ;VIC memory control (video matrix address, charset address)
+VICINT     = $D019  ;VIC interrupt(IRQ, Sprite collisions)
+IRQMASK    = $D01A
+PRIORITY   = $D01B ;sprite/background priority
+SPRMC      = $D01C  ;sprites 0-7 multi-color
+SPRH       = $D01D  ;sprites 0-7 expand horizontal
+SSCOL      = $D01E  ;sprite to sprite collision
+SBCOL      = $D01F  ;sprite to background collision
+BORDER     = $D020
+BG0        = $D021
+BG1        = $D022
+BG2        = $D023
+BG3        = $D024
+SMC0       = $D025  ;sprite multi-color 0
+SMC1       = $D026  ;sprite multi-color 1
+SPR0C      = $D027  ;sprite 0-7 colors
+SPR1C      = $D028
+SPR2C      = $D029
+SPR3C      = $D02A
+SPR4C      = $D02B
+SPR5C      = $D02C
+SPR6C      = $D02D
+SPR7C      = $D02E
+
+JOY1       = $DC01
+JOY2       = $DC00
+
+
+; KERNAL routines
+ACPTR   = $FFA5
+CHKIN   = $FFC6
+CHKOUT  = $FFC9
+CHRIN   = $FFCF
+CHROUT  = $FFD2
+CIOUT   = $FFA8
+CINT    = $FF81
+CLALL   = $FFE7
+CLOSE   = $FFC3
+CLRCHN  = $FFCC
+GETIN   = $FFE4
+IOBASE  = $FFF3
+IOINIT  = $FF84
+LISTEN  = $FFB1
+LOAD    = $FFD5
+MEMBOT  = $FF9C
+MEMTOP  = $FF99
+OPEN    = $FFC0
+PLOT    = $FFF0
+RAMTAS  = $FF87
+RDTIM   = $FFDE
+READST  = $FFB7
+RESTOR  = $FF8A
+SAVE    = $FFD8
+SCNKEY  = $FF9F
+SCREEN  = $FFED
+SECOND  = $FF93
+SETLFS  = $FFBA
+SETMSG  = $FF90
+SETNAM  = $FFBD
+SETTIM  = $FFDB
+SETTMO  = $FFA2
+STOP    = $FFE1
+TALK    = $FFB4
+TKSA    = $FF96
+UDTIM   = $FFEA
+UNLSN   = $FFAE
+UNTLK   = $FFAB
+VECTOR  = $FF8D

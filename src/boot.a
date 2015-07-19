@@ -1,0 +1,267 @@
+; "Downtown"
+;(c) 2002 by Eric Odland
+;
+; File : boot.a
+;
+; Contains : Skeleton of the program. Mainly calls other routines.
+;
+; Written for dasm, the 6502 cross-compiler(http://sourceforge.net/projects/dasm-dillon/)
+; Assemble .prg file with: make
+SPRITE_DIR = "../sprites/"
+
+	processor 6502
+
+
+; ************ ZERO PAGE VARIABLES ***********	
+	SEG.U ZeroPage
+	org $E2
+ZeroPage:
+;Menu
+MenuMode	DC.B 0	; what mode the menu is in
+
+; Timing
+FrameToggle	DC.B 0	; toggles between 0/1 every frame (so game is 30 fps)
+VProgramLoopInterrupt DC.W 0 ; Vector: where screenupdate will set the next interrupt
+NextIRQCompare	DC.B 0	; Next interrupt scanline number
+
+; ScreenUpdate
+RoughScroll	DC.B 0	; current level rough scroll pos(upper-left lo-byte)
+FineScroll	DC.B 0	; smooth X scroll
+Page		DC.B 0	; what page we're on (0 or 1)
+
+; Screen
+ScreenUpdateFlag DC.B 0 ; 1 means screen needs updating
+CursorColor	DC.B 0
+CursorPos	DC.W 0	; position of cursor in screen memory
+ColorPos	DC.W 0	; corresponding color location for cursor
+
+; General
+Temp		DC.W 0	; temporary area for storing word addresses
+Temp2		DC.W 0
+Temp3		DC.W 0
+
+; Game
+LevelHeaderFlags DC.B 0	; see Levels below for meaning of bits
+ResetFlag	DC.B 0	; whether or not game has been reset
+Mode		DC.B 0	; mode of game (see DTGame.a)
+NextLevel	DC.W 0	; ptr to the next level
+
+; Music
+MusicZP		DC.B 0,0,0,0,0,0	; used by music routine ($FA-$FF)
+
+
+
+	include "Macros.a"
+    include "system.a"
+
+; ************** BASIC HEADER ***************
+	SEG header
+	org $0801
+	DC.W BASEND,2002
+	DC $9E
+	DC "2061"
+	DC 0
+BASEND	DC.W 0
+
+
+; ****************    CODE   *****************	
+	SEG code
+	org 2061
+Start:	sei
+	
+	ldx #$FF		    ; reset stack
+	txs
+	cld			        ; clear decimal mode
+	
+	ldx #($FF-ZeroPage)	; reset zeropage variables
+	lda #0
+loop	sta ZeroPage,x
+	dex
+	bpl loop
+
+	; BASIC ROM($A000-$BFFF)/KERNAL ROM($E000-$FFFF) out
+	lda #%00110101
+	sta PROCESSOR_PORT
+
+    ; do screen fade out
+	lda #5    ; wait time between fade
+	sta $0337
+fader	pha
+	jsr FadeScreen
+	jsr Wait
+	pla
+	tax
+	dex
+	txa
+	bne fader
+	;lda #0			    ; black screen
+	;sta $D020
+	;sta $D021
+
+	jsr ClearScreen		;clear screen
+	spr_disable_all 	;turn off all sprites
+	lda #%00011110		; VideoMatrix = $0400, Char = $3800
+	sta VICMEM
+	jsr C64LOGO		    ; show C64 Logo
+	jsr TextInit		; init text
+	lda #ExitToMainMenu ; get ready for main menu mode
+	jsr SetMode
+	jmp InitIRQ		    ; setup IRQ interrupt
+	
+	ECHO "Writing Code Segment 1:     $080d -",.-1
+
+	include "logo.asm"
+	
+	ECHO "Writing Logo Code:                -",.-1," (",($1000 - .), "bytes remaining. )"
+
+	DC "OH, WHAT A MEAL!",0
+copyright_string:
+	DC copyright_char
+	DC "2002 STONE MONKEY, INC.",0
+
+
+;**************** DOWNTOWN DATA ****************
+;	
+	SEG data
+;**************** Sprites ****************
+;
+	org $1000,0	; area for C64 logo sprites ($1000-$14BF)
+Sprites:
+	org $14C0,0 ; in-game sprites
+	;incbin SPRITE_DIR + "gamesprites.spr"
+	incbin "gamesprites.spr"
+
+	ECHO "Including Sprite Data:      $1000 -",.-1
+
+
+; ************* Screen 1 & 2 ***************
+;
+Screen1 = $0400
+Screen2 = $2C00
+
+	ECHO "Defining Screen 2:          $2c00 - $2fff"
+
+
+
+; ************* Charsets 1 & 2 ***************
+;
+	org $3000,0
+	ECHO "Including Character Sets:"
+Charset1:		; ($3000-$3800)
+	incbin "chrset1.chr"
+	ECHO "    Including chrset1.chr:  $3000 -",.-1
+	org $3800,0
+Charset2:		; ($3800-$3FFF)
+	org $3A00,0	; C64 logo chars ($3A00-$3B1F chars 64-99)
+	org $3B20,0	; Ping logo ($3B20-$3C4F chars 100-138)
+	incbin "pinglogo.chr"
+	ECHO "    Including pinglogo.chr: $3b20 -",.-1
+	org $3C50,0	;
+	
+;	incbin "chrset2.chr"
+
+	ECHO "    Including chrset2.chr:        -",.-1
+
+
+; ************* BG/Char Colors 1 & 2 ***************
+;
+	org $4000,0
+BGColors1:
+Colors1 = $3FC3
+	
+	incbin "chrset1.colortable"
+	
+	;$40C3
+BGColors2:
+Colors2 = $4086
+	;incbin "chrset2.colortable"
+	
+	;$4186
+	; ***** Variable Space *****
+	
+	ECHO "Including 2 colortables:    $4000 -",.-1
+
+
+; ************* Block data ***************
+;
+	org $4200,0
+BlockSet1:
+	incbin "downtown1.blocks"
+	
+	ECHO "Including Block Data 1:     $4200 -",.-1
+
+BlockSet2:	
+	;incbin "downtown2.blocks"
+	ECHO "Including Block Data 2:           -",.-1
+	
+	
+; ************* Current Level Space ***************
+;
+	org $4A00,0
+CurLevel:
+	ECHO "Defining Level Area:        $4a00 - $5bff"
+
+
+; ************* 16 Compressed Levels ***************
+; $5C00 - $A3FF
+	org $5C00,0
+; Level header flag:
+;	Bit 0 - what char set to use
+;	Bit 1 - what block set to use
+Levels:
+Level1:
+LevelHeaderSize set .
+;   Header
+	DC.B 12			; chrset to use(12=$3000, 14=$3800)
+	DC.W Level1		; ptr to next level
+	DC.B %00000000		; level flags (see above)
+LevelHeaderSize set . - LevelHeaderSize
+;   Data
+	incbin "downtown1.level"
+;Level 2
+;Level 3
+;Level 4
+;Level 5
+;Level 6
+;Level 7
+;Level 8
+;Level 9
+;Level 10
+;Level 11
+;Level 12
+;Level 13
+;Level 14
+;Level 15
+;Level 16
+
+	ECHO "Including",((.-$5C00)/1152),"Levels:        $5c00 -",.-1
+
+; ************* Offscreen Color Area ***************
+OffscreenColor = $A400		; this must be multiple of $100
+				;  for DrawLevelToOffscreen to work
+
+;**************** DOWNTOWN CODE ****************
+	SEG code
+	org $A6D0,0
+
+	include "DTScreen.a"
+	include "DTText.a"
+	include "DTGraphics.a"
+	include "DTMenu.a"
+	include "DTUtil.a"
+	include "DTGame.a"
+	include "DTObjects.a"
+	; information for sprite sequences, x offsets
+	include "DTSpriteInfo.a"
+
+	include "system.a"
+	
+	ECHO "Writing Code Segment 2:     $a400 -",.-1," (",($D000 - .),"bytes remaining. )"
+	ECHO ""
+	ECHO ""
+	
+; ************* Music ***************
+; $E000-$FFFF
+	org $E000
+MusicInit:
+MusicPlay = .+3

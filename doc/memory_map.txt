@@ -1,0 +1,57 @@
+Ping:Crow Boy Memory Map
+
+
+Memory		Size	Size	Description
+		(HEX)	(DEC)
+-----------------------------------------------------------------
+$0002-$00FF	$  FE     254	Reserved for variables/ptrs
+$0100-$01FF	$ 100	  256	Reserved for 6502 stack
+$0400-$07E7	$ 3E8   1,000 	Screen 1
+$07F8-$07FF	$   8       8 	Screen 1 Sprite Data Ptrs
+$0800-$080F	$  10	   16	~UNUSED~
+$0810-$0FFF	$ 7F0   2,032 	Code
+$1000-$2FFF	$2000   8,192 	Sprites(64-191)
+$3000-$3FFF	$1000   4,096 	Charset(x2)
+$4000-$4185	$ 186     390 	Colors(195 x2)
+$4186-$41FF	$  7A     122 	~UNUSED~
+$4200-$49FF	$ 800   2,048 	Blocks(1,024 x2)
+$4A00-$5BFF	$1200   4,608 	Decompressed Level(256x18)
+$5C00-$A3FF	$4800  18,432 	16 levels(128x9x16)
+				or 102 small levels(20x9x102)
+$A400-$CFFF	$2C00  11,264 	Code
+$D000-$DFFF	$1000   4,096	Normal C64 I/O
+$E000-$FFF9	$1FFA   8,186	~UNUSED~ (music?)
+
+
+
+Memory Map:REVISION 1
+Memory		Size	Size	Description
+		(HEX)	(DEC)
+-----------------------------------------------------------------
+$0002-$00FF	$  FE     254	Reserved for variables/ptrs
+$0100-$01FF	$ 100	  256	Reserved for 6502 stack
+$0314-$0315	$   2	    2	Vector:IRQ routine
+$0337		$   1	    1	Wait routine pause value
+$0400-$07E7	$ 3E8   1,000 	Screen 1
+$07E8-$07F7	$  10	   16	~UNUSED~
+$07F8-$07FF	$   8       8 	Screen 1 Sprite Data Ptrs
+$0800-$080F	$  10	   16	~UNUSED~
+$0810-$0FFF	$ 7F0   2,032 	Boot Code
+$1000-$14BF	$ 4C0	1,216	Reserved for C64 logo sprites(19)*
+$14C0-$2BFF	$1C00   7,168 	Sprites(83-175 Total:93)
+$2C00-$2FE7	$ 3E8   1,000	Screen 2
+$2FE8-$2FF7	$  10	   16	~UNUSED~
+$2FF8-$2FFF	$   8       8 	Screen 2 Sprite Data Ptrs
+$3000-$3FFF	$1000   4,096 	Charset(x2)
+$4000-$4185	$ 186     390 	Char Color data(195 x2)
+$4186-$41FF	$  7A     122 	~UNUSED~
+$4200-$49FF	$ 800   2,048 	Blocks(1,024 x2)
+$4A00-$5BFF	$1200   4,608 	Decompressed Level(256x18)
+$5C00-$A3FF	$4800  18,432 	16 levels(128x9x16)
+				or 102 small levels(20x9x102)
+$A130-$A3FF	$ 2D0	  720	Offscreen Char Color Map
+$A400-$CFFF	$2C00  11,264 	Code
+$D000-$DFFF	$1000   4,096	Normal C64 I/O
+$E000-$FFF9	$1FFA   8,186	~UNUSED~ (music?)
+
+* Can be written over once game starts

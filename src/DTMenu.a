@@ -1,0 +1,198 @@
+; "Downtown"
+;(c) 2002 by Eric Odland
+;
+; File : DTMenu.a
+;
+; Contains : Main menu
+;
+;
+
+LoopMenu	EQU 1
+DrawMenu	EQU 0
+
+SelectionArrow = 45	; char # of selection arrow
+
+
+
+MainMenu	subroutine
+	lda #>(IRQExit-1)	; setup RTS to jump to IRQExit
+	pha
+	lda #<(IRQExit-1)
+	pha
+
+	ldx MenuMode		; what's the menu mode?
+	beq .DoDrawMenu		;  draw menu
+	dex
+	beq .DoLoopMenu		;  menu loop
+	rts
+	
+.DoDrawMenu	jmp DoDrawMenu
+.DoLoopMenu	jmp DoLoopMenu
+
+
+	
+DoDrawMenu	subroutine
+	jsr ClearScreen
+	
+	lda #red
+	sta $d021
+	
+	;lda #blue		; text = blue
+	;jsr SetCursorColor
+	;lda #<.menu
+	;ldy #>.menu
+	;jsr Print
+	
+	ldx #9		; draw "Ping"
+	ldy #17
+	jsr SMPlot
+	lda #white
+	jsr SetCursorColor
+	lda #100
+	ldx #6
+	ldy #5
+	jsr DrawPic
+	
+	ldx #23		; "Copyright 2002"
+	ldy #8
+	jsr SMPlot
+	lda #<copyright_string
+	ldy #>copyright_string
+	jsr Print
+	
+	ldx #18		; "Start Game"
+	ldy #14
+	jsr SMPlot
+	lda #<.sg
+	ldy #>.sg
+	jsr Print
+	
+	ldx #20		; "OPtions"
+	ldy #14
+	jsr SMPlot
+	lda #<.op
+	ldy #>.op
+	jsr Print
+	
+	ldx #1		; Draw Ping's face
+	ldy #10
+	jsr SMPlot
+	lda #yellow
+	jsr SetCursorColor
+	lda #<.ping
+	ldx #>.ping
+	ldy #19
+	jsr DrawPicMap
+	
+	ldx #15		; "Crow Boy"
+	ldy #16
+	jsr SMPlot
+	lda #<.cbs
+	ldy #>.cbs
+	jsr Print
+		
+	lda #$05	; short pause
+	sta $0337
+	jsr Wait
+	
+	lda #2		; Setup Menu with 2 items,
+	ldx #18		;  starting at row 16, column 15
+	ldy #12
+	jsr SetupMenu
+	
+	inc MenuMode	; set mode to LoopMenu
+	rts		; goto IRQExit
+.menu	DC "OH, WHAT A MEAL!",0
+.cbs	DC "CROW BOY",0
+.sg	DC "START GAME",0
+.op	DC "OPTIONS",0
+.ping	incbin "PingTitle.chrmap"
+	DC 0
+	
+	
+DoLoopMenu	subroutine
+	jsr MenuSelect
+	dex
+	bmi .1		; X was 0(no selection)
+	bne .2		; X was 1
+	lda #NewGame	;   set mode to do new game
+	jsr SetMode
+	;sei
+	set_interrupt #ModeJump
+	;cli
+	rts
+.2	nop		; X was 2
+.1	rts		; goto IRQExit
+	
+
+; Function Name: 	SetupMenu (MenuSelect modified from School RPG source)
+;
+; Purpose: 		Select from a menu using joystick
+;
+; Registers used: 	.A, .X, .Y
+;
+; How to use:
+;	Load .X/.Y with row/column to left of first menu item
+;	Load .A with # of menu items
+;	Call SetupMenu.
+;	Call MenuSelect on every IRQ.
+;	Item selected will be returned in .X
+;		if item hasn't been selected yet, .X = 0
+;
+SetupMenu	subroutine
+	STA .ITEMS
+	LDA #1		;current menu item
+	STA .SEL
+	STY .column	; store row/column
+	STX .row
+	JSR SMPlot	; set cursor to desired position
+	RTS
+MenuSelect:
+.ARROW	JSR Wait	;little delay for selection
+.R1	JSR ReadJoy	;read joystick
+	BCC .END2
+	CPY #0
+	BEQ .MOVE
+	BMI .UP
+.DOWN	LDA .ITEMS
+	CMP .SEL
+	BEQ .MOVE
+	JSR .ERASE
+	INC .row
+	INC .row
+	INC .SEL
+	JMP .MOVE
+.UP	LDA .SEL
+	CMP #1
+	BEQ .MOVE
+	JSR .ERASE
+	DEC .row
+	DEC .row
+	DEC .SEL
+.MOVE	CLC
+	ldx .row
+	ldy .column
+	JSR SMPlot
+	LDA #SelectionArrow  ; show selection arrow
+	JSR SMChrout
+	;JMP .ARROW
+	ldx #0		; user hasn't selected an item yet
+	rts
+.END2	LDX .SEL
+	RTS
+;.ERASE	LDX #4
+;.R2	LDA .ER-1,X
+;	JSR SMChrout
+;	DEX
+;	BNE .R2
+.ERASE	jsr BackSpace
+	lda #SpaceBar
+	jsr SMChrout
+.R3	SEC		;get row/column
+	JSR SMPlot
+	RTS
+
+.ITEMS	DC 0
+.SEL	DC 0
+.row	DC 0
+.column DC 0

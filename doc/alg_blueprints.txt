@@ -1,0 +1,219 @@
+Ping:Crow Boy Function Blueprints
+
+
+
+DRAW SCREEN
+This function will draw a part of the current level to screen
+; METHOD 1
+; 6502 Asm code
+; copy level to screen
+.0	ldy #39			; 2 cycle
+.1	lda (levelPtr), y	; 5
+	sta (screenPtr), y	; 6
+	tax			; 2
+	lda colorData, x	; 4
+	sta (colorPtr), y	; 6
+	
+	dey			; 2
+	bpl .1			; 2, 3-4
+	clc			; 2    next row of levelPtr, screenPtr, and colorPtr
+	lda #40			; 2
+	adc screenPtr		; 3
+	bcc .2			; 2, 3-4
+	inc screenPtr+1		; 5
+	inc colorPtr+1		; 5
+.2	sta screenPtr		; 3
+	sta colorPtr		; 3
+	inc levelPtr		; 5
+	lda #$5C		; 2    if levelPtr = $5C00, exit loop
+	cmp levelPtr		; 3
+	bne .0			; 2, 3-4
+
+	rts
+
+28*40*18+7*18+12*2+3*16+18*18 = 20682 cycles
+
+
+;METHOD 2
+; init	lda upperLeft		; 3
+	ldy #$4A		; 2
+	sta .lPtr+1		; 4
+	sty .lPtr+2		; 4
+	lda #<(screenPtr-1)	; 2
+	ldy #>(screenPtr-1)	; 2
+	sta .sPtr+1		; 4
+	sty .sPtr+2		; 4
+	lda #<(colorPtr-1)	; 2
+	ldy #>(colorPtr-1)	; 2
+	sta .cPtr+1		; 4
+	sty .cPtr+2		; 4
+
+.0	ldx #0			; 2
+.1	inc .sPtr+1		; 6
+	inc .cPtr+1		; 6
+	bne .2			; 2, 3-4
+	inc .sPtr+2		; 6
+	inc .cPtr+2		; 6
+.2:	
+.lPtr	lda $FFFF, x		; 4
+.sPtr	sta $FFFF		; 4
+	tay			; 2
+	lda colorData, y	; 4
+.cPtr	sta $FFFF		; 4
+
+	inx			; 2
+	cpx #40			; 2    if x = 40, do next row
+	bne .1			; 2, 3-4
+
+	inc .lPtr+2		; 6     .lPtr += 256;
+	lda .lPtr+2		; 4
+	cmp #$5C		; 2	  if last row, then exit
+	bne .0			; 2, 3-4
+	
+	rts
+
+2*18 + 12*18*40 + 12*2 + 3*18*40 + 18*18*40 + 4*18*40 + 2*18 + 3*40*18-18 + 12*18 + 3*18 + 2 = 29150
+
+
+;METHOD 3
+; unrolling the loop
+;   requires setting up table of pointers to rows in the level.
+;   LSBs will all be the same, MSBs are from $4A, $4B, $4C...$5B in increasing order
+	ldy #39			; 2 cycle
+.1	lda levelPtr1, y	; 4
+	sta kScreenPtr1, y	; 4-5
+	tax			; 2
+	lda kColorData, x	; 4
+	sta kColorPtr1, y	; 4-5
+
+	lda levelPtr2, y	; 4
+	sta kScreenPtr2, y	; 4-5
+	tax			; 2
+	lda kColorData, x	; 4
+	sta kColorPtr2, y	; 4-5
+
+	; ... etc ...
+
+	lda levelPtr18, y	; 4
+	sta kScreenPtr18, y	; 4-5
+	tax			; 2
+	lda kColorData, x	; 4
+	sta kColorPtr18, y	; 4-5
+
+	dey
+	bpl .1
+
+	rts
+
+;	((18*18)+2*18)*40 = 14400
+
+; METHOD 4a(best method)
+; Setting up another screen, page flip and copying just color
+	ldy #39 
+.1	lda kOffscrColorPtr1, y	; 4
+	sta kColorPtr1, y	; 4-5
+
+	; ... etc ...
+
+	dey
+	bpl .1
+
+	rts
+
+;	(8*16+9*2)*40 = 5840
+;	Loop very fast, but needs additional space for screen/color data.
+;		Also, would have to set aside a refresh for copying data into
+;		these offscreens, which would bump the framerate down slightly
+
+
+; METHOD 4b
+; Setting up another screen, no page flip copying color and char data
+	ldy #39 
+.1	lda kOffscrColorPtr1, y	; 4
+	sta kColorPtr1, y	; 4-5
+	lda kOffscrChar1, y	; 4
+	sta kScreenPtr1, y	; 4-5
+
+	; ... etc ...
+
+	dey
+	bpl .1
+
+	rts
+;	(16*16+18*2)*40 = 11680
+;	Same as METHOD 4a, but wouldn't need to worry about hardware page-flipping
+
+
+**************************************************************
+Handle input
+Pseudocode:
+void HandleInput()
+{
+	GetJoystick(&X, &Y, &Fire);
+	if (X = 1) RequestAction(0, Run, right);
+	else if (X =-1) RequestAction(0, Run, left);
+	else RequestAction(0, Stand);
+	
+	if (Y = 1);
+	else if (Y =-1) RequestAction(0, Jump);
+	
+	if (Fire) RequestAction(0, Attack);
+}
+
+**************************************************************
+Request action
+Possible actions to request:
+	Run(left or right)
+	Stand
+	Jump
+	Attack
+
+Pseudocode:
+void RequestAction(theObject, theAction, facing)	// this is for characters only
+{
+	if (theAction == theObject.currentAction) return;
+	
+	if (theAction == run && theObject.currentAction == stand)
+	{
+		goto setAction;
+	}
+	
+	if (theAction == stand)
+	{
+		goto setAction;
+	}
+	
+	if (theAction == jump && (theObject.currentAction != attack))
+	{
+		theObject.acceleration = -kJumpVelocity;
+		goto setAction;
+	}
+	
+	if (theAction == attack)
+	{
+		goto setAction;
+	}
+	
+	return;
+
+setAction:					// the action has been allowed, so make changes
+	theObject.newAction = true;
+	theObject.currentAction = theAction;
+	theObject.spriteDataPtr = *(theObject.actionArray + theAction);
+}
+
+**************************************************************
+Updating objects
+
+Pseudocode:
+void UpdateObjects()
+{
+	for(char i=0; i<8; i++)
+	{
+		if (obj[i].active = false)
+			continue;
+		
+	}
+	
+};
+	

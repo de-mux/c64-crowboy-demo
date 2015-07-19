@@ -1,0 +1,57 @@
+;"Downtown"
+;(c) 2002 by Eric Odland
+;
+; File : DTLoader.a
+;
+; Contains : Loader for "Downtown". This is the first program to be run.
+;			Does nothing but clear screen to black and load "Downtown" game.
+;           (at $mainprg)
+;
+; Note: This is a common trick used by many programmers to run a loaded program
+;       immediately without the RUN command. The program loads into an unused portion
+;       of memory from $02A7-$02FF and the last 4 bytes of the program are loaded
+;       into $0300-$0303, the error and BASIC warm start vectors. The error message
+;       vector at $0300-0301 isn't part of the trick, so it is replaced with the
+;       same word as would normally be. The warm start vector at $0302-$0303 is
+;       replaced with the word $02A7 (LSB first), forcing the code execution to
+;       jump straight to the beginning of the loaded program without the need for
+;       the user to type RUN.
+
+mainprg = $0811
+
+	processor 6502
+	org	$02A7
+
+	SEI
+	LDA #$00
+	STA $D020
+	STA $D021
+	JSR SETMSG
+	LDA #$93		; clear screen
+	JSR CHROUT
+	LDA #$08
+	TAX
+	LDA #$FF
+	JSR SETLFS
+	LDA #2			;length of filename
+	LDX #<FNAME
+	LDY #>FNAME
+	JSR SETNAM
+	LDA #0
+	JSR LOAD
+	BCS $02A7
+	LDA #$83
+	STA $0302
+	LDA #$A4
+	STA $0303
+	CLC
+	CLD
+	CLI
+	JMP mainprg
+FNAME	DC "MA"
+
+	ORG $0300
+	BYTE $8B, $E3	;IERROR   0300-0301   Vector: Print BASIC Error Message
+	BYTE $A7, $02	;IMAIN    0302-0303   Vector: BASIC Warm Start
+	
+	INCLUDE "system.a"
