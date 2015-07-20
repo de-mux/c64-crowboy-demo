@@ -9,6 +9,24 @@
 ; Assemble .prg file with: make
 SPRITE_DIR = "../sprites/"
 
+; define the VIC-II 16K bank to use
+VIC_BANK = 1   ; $4000-$7FFF
+VIC_BANK_START_LOC = VIC_BANK * $4000
+VIC_BANK_SELECT_BITS = (3-VIC_BANK)
+
+; define banks for screen 1 & 2 character data maps(relative to VIC_BANK_START_LOC)
+SCREEN_1_BANK_START_LOC = $0C00
+SCREEN_1_BANK_SELECT_BITS = SCREEN_1_BANK_START_LOC / $40
+SCREEN_2_BANK_START_LOC = $2C00
+SCREEN_2_BANK_SELECT_BITS = SCREEN_2_BANK_START_LOC / $40
+
+; define banks for character memory (chrsets 1 & 2, relative to VIC_BANK_START_LOC)
+CHARSET_1_START_LOC = $3000
+CHARSET_1_BANK_SELECT_BITS = CHARSET_1_START_LOC / $400
+CHARSET_2_START_LOC = $3800
+CHARSET_2_BANK_SELECT_BITS = CHARSET_2_START_LOC / $400
+
+
 	processor 6502
 
 
@@ -98,9 +116,17 @@ fader	pha
 	;sta $D020
 	;sta $D021
 
+
 	jsr ClearScreen		;clear screen
 	spr_disable_all 	;turn off all sprites
-	lda #%00011110		; VideoMatrix = $0400, Char = $3800
+    ; set VIC-II bank
+    lda CIA2
+    and #%11111100
+    ora #VIC_BANK_SELECT_BITS
+    sta CIA2
+
+	;lda #%00011110		; VideoMatrix = $0400, Char = $3800
+    lda #(SCREEN_1_BANK_SELECT_BITS + CHARSET_2_BANK_SELECT_BITS)
 	sta VICMEM
 	jsr C64LOGO		    ; show C64 Logo
 	jsr TextInit		; init text
@@ -123,88 +149,47 @@ copyright_string:
 ;**************** DOWNTOWN DATA ****************
 ;	
 	SEG data
-;**************** Sprites ****************
-;
-	org $1000,0	; area for C64 logo sprites ($1000-$14BF)
-Sprites:
-	org $14C0,0 ; in-game sprites
-	;incbin SPRITE_DIR + "gamesprites.spr"
-	incbin "gamesprites.spr"
-
-	ECHO "Including Sprite Data:      $1000 -",.-1
-
-
-; ************* Screen 1 & 2 ***************
-;
-Screen1 = $0400
-Screen2 = $2C00
-
-	ECHO "Defining Screen 2:          $2c00 - $2fff"
-
-
-
-; ************* Charsets 1 & 2 ***************
-;
-	org $3000,0
-	ECHO "Including Character Sets:"
-Charset1:		; ($3000-$3800)
-	incbin "chrset1.chr"
-	ECHO "    Including chrset1.chr:  $3000 -",.-1
-	org $3800,0
-Charset2:		; ($3800-$3FFF)
-	org $3A00,0	; C64 logo chars ($3A00-$3B1F chars 64-99)
-	org $3B20,0	; Ping logo ($3B20-$3C4F chars 100-138)
-	incbin "pinglogo.chr"
-	ECHO "    Including pinglogo.chr: $3b20 -",.-1
-	org $3C50,0	;
-	
-;	incbin "chrset2.chr"
-
-	ECHO "    Including chrset2.chr:        -",.-1
+; ************* Offscreen Color Area ***************
+OffscreenColor = $0400		; this must be multiple of $100
+				;  for DrawLevelToOffscreen to work
 
 
 ; ************* BG/Char Colors 1 & 2 ***************
 ;
-	org $4000,0
+	org $1000,0
 BGColors1:
-Colors1 = $3FC3
+Colors1 = .-$3D    ;$3FC3
 	
 	incbin "chrset1.colortable"
 	
 	;$40C3
 BGColors2:
-Colors2 = $4086
+Colors2 = .-$3D    ;$4086
 	;incbin "chrset2.colortable"
 	
-	;$4186
+	;$1186
 	; ***** Variable Space *****
 	
-	ECHO "Including 2 colortables:    $4000 -",.-1
+	ECHO "Including 2 colortables:    $1000 -",.-1
 
 
 ; ************* Block data ***************
 ;
-	org $4200,0
+	org $1200,0
+BlockData:
 BlockSet1:
 	incbin "downtown1.blocks"
 	
-	ECHO "Including Block Data 1:     $4200 -",.-1
+	ECHO "Including Block Data 1:     $1200 -",.-1
 
 BlockSet2:	
 	;incbin "downtown2.blocks"
 	ECHO "Including Block Data 2:           -",.-1
 	
 	
-; ************* Current Level Space ***************
-;
-	org $4A00,0
-CurLevel:
-	ECHO "Defining Level Area:        $4a00 - $5bff"
-
-
 ; ************* 16 Compressed Levels ***************
-; $5C00 - $A3FF
-	org $5C00,0
+; $1A00 - $397F
+	org $1A00,0
 ; Level header flag:
 ;	Bit 0 - what char set to use
 ;	Bit 1 - what block set to use
@@ -212,7 +197,7 @@ Levels:
 Level1:
 LevelHeaderSize set .
 ;   Header
-	DC.B 12			; chrset to use(12=$3000, 14=$3800)
+	DC.B CHARSET_1_BANK_SELECT_BITS			; chrset to use(12=$7000, 14=$7800)
 	DC.W Level1		; ptr to next level
 	DC.B %00000000		; level flags (see above)
 LevelHeaderSize set . - LevelHeaderSize
@@ -234,11 +219,50 @@ LevelHeaderSize set . - LevelHeaderSize
 ;Level 15
 ;Level 16
 
-	ECHO "Including",((.-$5C00)/1152),"Levels:        $5c00 -",.-1
+	ECHO "Including",((.-$1A00)/1152),"Levels:        $1A00 -",.-1
+; ************* Screen 1 & 2 ***************
+;
+Screen1 = VIC_BANK_START_LOC + SCREEN_1_BANK_START_LOC   ;$4C00, was $0400
+Screen2 = VIC_BANK_START_LOC + SCREEN_2_BANK_START_LOC   ;$6C00, was $2C00
 
-; ************* Offscreen Color Area ***************
-OffscreenColor = $A400		; this must be multiple of $100
-				;  for DrawLevelToOffscreen to work
+
+; ************* Current Level Space ***************
+;
+	org $3A00,0
+CurLevel:
+	ECHO "Defining Level Area:        $3a00 - $3bff"
+
+
+;**************** Sprites ****************
+;
+	org $5000,0	; area for C64 logo sprites ($1000-$14BF)
+Sprites:
+	org $54C0,0 ; in-game sprites
+	;incbin SPRITE_DIR + "gamesprites.spr"
+	incbin "gamesprites.spr"
+
+	ECHO "Including Sprite Data:      $5000 -",.-1
+
+
+; ************* Charsets 1 & 2 ***************
+;
+	org $7000,0
+	ECHO "Including Character Sets:"
+Charset1:		; ($7000-$7800)
+	incbin "chrset1.chr"
+	ECHO "    Including chrset1.chr:  $7000 -",.-1
+	org $7800,0
+Charset2:		; ($7800-$7FFF)
+	org $7A00,0	; C64 logo chars ($7A00-$7B1F chars 64-99)
+	org $7B20,0	; Ping logo ($7B20-$7C4F chars 100-138)
+	incbin "pinglogo.chr"
+	ECHO "    Including pinglogo.chr: $7b20 -",.-1
+	org $7C50,0	;
+	
+;	incbin "chrset2.chr"
+
+	ECHO "    Including chrset2.chr:        -",.-1
+
 
 ;**************** DOWNTOWN CODE ****************
 	SEG code
@@ -256,7 +280,7 @@ OffscreenColor = $A400		; this must be multiple of $100
 
 	include "system.a"
 	
-	ECHO "Writing Code Segment 2:     $a400 -",.-1," (",($D000 - .),"bytes remaining. )"
+	ECHO "Writing Code Segment 2:     $a6d0 -",.-1," (",($D000 - .),"bytes remaining. )"
 	ECHO ""
 	ECHO ""
 	

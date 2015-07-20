@@ -36,25 +36,25 @@ FadeOut			EQU 9
 ;
 InitIRQ	subroutine
 	lda #%01111111
-	sta $DC0D	; disable CIA1 interrupts
-	sta $DD0D	; disable CIA2 interrupts
+	sta $DC0D	    ; disable CIA1 interrupts
+	sta $DD0D	    ; disable CIA2 interrupts
 	lda #1
-	sta $D01A	; Enable IRQ Interrupts
+	sta IRQMASK	    ; Enable IRQ Interrupts(D01A)
 	lda #%00011011	; Clear hi-bit of raster compare
-	sta $D011
+	sta VIC1        ; D011
 	
-	ldx #5		;set IRQ interrupt vectors
+	ldx #5		    ;set IRQ interrupt vectors
 .1	lda .vectors,x	; we use hardcore hardware vectors at $FFFA instead
-	sta $FFFA,x	;  of lame soft vectors at $0314
+	sta $FFFA,x	    ;  of lame soft vectors at $0314
 	dex
 	bpl .1
 	set_interrupt #MainMenu	; set interrupt to code at MainMenu
 	lda #MMCompare	; set raster compare line
-	sta $D012
+	sta IRQ         ; D012
 	
 	lda $DC0D	; ACK CIA 1 interrupts
 	lda $DD0D	; ACK CIA 2 interrupts
-	asl $D019	; ACK VIC interrupts
+	asl VICINT	; ACK VIC interrupts
 	
 	cli		; enable interrupt
 	
@@ -95,12 +95,12 @@ SetMode	subroutine
 ;	Enable interrupts.
 ;
 IRQEnter	subroutine
+    ; store registers
 	pha
 	txa
 	pha
 	tya
 	pha
-	
 	
 	tsx
 	lda $0104,X	;Get break flag
@@ -129,9 +129,9 @@ ModeJump	subroutine
 	eor #1
 	sta FrameToggle
 	bne .1		; 0 means do game update
-			; 1 means setup screen update at scanline SUCompare and RTI
+			    ; 1 means setup screen update at scanline SUCompare and RTI
 	lda #SUCompare
-	sta $D012
+	sta IRQ
 	set_interrupt #ScreenUpdate
 	jmp ModeExit
 	
@@ -160,7 +160,7 @@ ModeJump	subroutine
 	rts			; jumps to ModeExit if no mode...
 ModeExit lda #0			; visual indicator of where IRQ ends
 	sta $d020
-IRQExit	asl $D019
+IRQExit	asl VICINT
 	PLA
 	TAY
 	PLA
@@ -168,14 +168,14 @@ IRQExit	asl $D019
 	PLA
 	rti
 ; Jump Table
-.DoWorldUpdate	jmp DoWorldUpdate
-.DoNewGame	jmp DoNewGame
-.DoSetupLevel	jmp DoSetupLevel
-.DoFinishLevel	jmp DoFinishLevel
-.DoLoseLife	jmp DoLoseLife
-.DoGameOver	jmp DoGameOver
-.DoMainMenu	jmp DoMainMenu
-.DoExitToMainMenu	jmp DoExitToMainMenu
+.DoWorldUpdate	  jmp DoWorldUpdate
+.DoNewGame	      jmp DoNewGame
+.DoSetupLevel	  jmp DoSetupLevel
+.DoFinishLevel	  jmp DoFinishLevel
+.DoLoseLife	      jmp DoLoseLife
+.DoGameOver	      jmp DoGameOver
+.DoMainMenu	      jmp DoMainMenu
+.DoExitToMainMenu jmp DoExitToMainMenu
 
 
 flipbit	DC.B 0
@@ -380,16 +380,16 @@ DoSetupLevel	subroutine
 	bcs .color2
 	; decode level flags
 	ldx BGColors1+0
-	stx $D021
+	stx BG0_COLOR
 	ldx BGColors1+1		; what color set? Set BG colors 0-2
 	ldy BGColors1+2
 	bpl .nxt		; branch always
 .color2	ldx BGColors2+0
-	stx $D021
+	stx BG0_COLOR
 	ldx BGColors2+1
 	ldy BGColors2+2
-.nxt	stx $D022
-	sty $D023
+.nxt	stx BG1_COLOR
+	sty BG2_COLOR
 
 	ldx #>BlockSet1
 	lsr			; what block set? (0 or 1)
@@ -434,14 +434,14 @@ DoSetupLevel	subroutine
 .nxtLev	lda $FFFF,x		; get byte from row of level data
 	tax
 	
-.upLft	lda $4200,x		;  .x = block #, .y = decoded level column
+.upLft	lda BlockData,x		;  .x = block #, .y = decoded level column
 	sta (Temp),y
-.loLft	lda $4300,x
+.loLft	lda BlockData+$100,x
 	sta (Temp2),y
 	iny
-.upRt	lda $4400,x
+.upRt	lda BlockData+$200,x
 	sta (Temp),y
-.loRt	lda $4500,x
+.loRt	lda BlockData+$300,x
 	sta (Temp2),y
 ;	
 	ldx Temp3
@@ -511,12 +511,12 @@ DoMainMenu	subroutine
 DoExitToMainMenu	subroutine
 	set_interrupt #MainMenu	; set interrupt to code at MainMenu
 	lda #MMCompare	; set raster compare line
-	sta $D012
+	sta IRQ
 	rts
 
 BRKVector	subroutine
 	lda #1
-	sta $d020
+	sta BORDER_COLOR
 	lda #white
 	jsr SetCursorColor
 	jsr ClearScreen

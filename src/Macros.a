@@ -58,16 +58,16 @@
 	temp SET <<temp
 	REPEND
 	LDA #temp
-	ORA $D015
+	ORA SPRDISP
 	ENDM
 	
-			;spr_enable_all
+	;spr_enable_all
 	MAC spr_enable_all
 	LDA #$FF
-	STA $D015
+	STA SPRDISP
 	ENDM
 	
-			;spr_disable [0-7]
+	;spr_disable [0-7]
 	MAC spr_disable
 	temp SET 1
 	REPEAT {1}
@@ -75,16 +75,16 @@
 	REPEND
 	temp SET ~temp
 	LDA #temp
-	AND $D015
+	AND SPRDISP
 	ENDM
 	
-			;spr_disable_all
+	;spr_disable_all
 	MAC spr_disable_all
 	LDA #0
-	STA $D015
+	STA SPRDISP
 	ENDM
 	
-			;spr_move [0-7] [X] [Y]
+	;spr_move [0-7] [X] [Y]
 	MAC spr_move	; will automatically set x-coord msb, but will not clear
 	LDA <{2}
 	STA $D000+{1}*2
@@ -123,9 +123,9 @@
 	ENDM
 	
 	MAC set_level	;set_level [byte level]
-	lda #<($5C00 + ({1}-1)*(128*9+2))
+	lda #<(Levels + ({1}-1)*(128*9+2))
 	sta NextLevel
-	lda #>($5C00 + ({1}-1)*(128*9+2))
+	lda #>(Levels + ({1}-1)*(128*9+2))
 	sta NextLevel+1
 	ENDM
 

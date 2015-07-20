@@ -52,6 +52,8 @@ ClearScreen 	subroutine
 	and #%11110000
 	lsr
 	lsr
+    clc
+    adc #>VIC_BANK_START_LOC
 	tax
 	stx .1+2
 	inx
@@ -62,8 +64,8 @@ ClearScreen 	subroutine
 	
 	ldx #0
 	lda #SpaceBar
-.1	sta $0400,x
-.2	sta $0500,x
+.1	sta $0400,x  ; these base addresses get set above based on VIC bank and
+.2	sta $0500,x  ;   current screen mem bank
 .3	sta $0600,x
 .4	sta $06E9,x
 	dex

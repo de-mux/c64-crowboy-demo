@@ -7,9 +7,10 @@
 ;
 ;
 
-
 ; ******************* DATA *******************
 ;
+SCREEN_WIDTH = 40
+SCREEN_ROWS = 18
 	
 ; constants
 kSetBit:		; used to set a bit to 0-7
@@ -40,13 +41,13 @@ S_enable DS.B 1
 InitGameGraphics	subroutine
 	jsr ClearBothScreens
 	lda #%00010000	; Multi-Color, 38 column display
-	sta $D016
+	sta VIC2
 	lda #%11111111	; Sprites multi-color
-	sta $D01C
+	sta SPRMC
 	lda #10
-	sta $D025
+	sta SPR_MC0
 	lda #6
-	sta $D026
+	sta SPR_MC1
 	rts
 
 ; ******************* ClearBothScreens *******************
@@ -69,15 +70,14 @@ ClearBothScreens subroutine
 	rts
 
 
-
 ; ******************* SetPage *******************
 ;
-; Purpose: 		Set current page to $0400 or $2C00
+; Purpose: 		Set current page to Screen1 or Screen2
 ;
 ; Registers used: 	.A
 ;
 ; How to use:
-;	Load .A with 0 for page at $0400, 1 for page at $2C00
+;	Load .A with 0 for page at screen 1, 1 for page at screen 2
 ;	Call this routine before starting the game loop
 ;
 SetPage		subroutine
@@ -85,10 +85,10 @@ SetPage		subroutine
 	sta Page
 	lda VICMEM
 	and #%00001111
-	ora #%00010000
 	ldx Page
 	beq .1
-	ora #%10110000
+	ora #SCREEN_1_BANK_SELECT_BITS
+	ora #SCREEN_2_BANK_SELECT_BITS
 .1	sta VICMEM
 	
 	;jsr PageFlip
@@ -109,10 +109,10 @@ SetPage		subroutine
 PageFlip	subroutine
 	lda VICMEM
 	and #%00001111
-	ora #%00010000
+	ora #SCREEN_1_BANK_SELECT_BITS
 	ldx Page
 	bne .1
-	ora #%10110000
+	ora #SCREEN_2_BANK_SELECT_BITS
 .1	sta VICMEM
 	txa
 	eor #1		; toggle Page #
@@ -130,25 +130,25 @@ PageFlip	subroutine
 ;	Each time you call this routine the screen gets a shade darker.
 ;
 FadeScreen	subroutine
-	lda $D020
+	lda BORDER_COLOR
 	jsr .getcolor
-	sta $D020
-	lda $D021
+	sta BORDER_COLOR
+	lda BG0_COLOR
 	jsr .getcolor
-	sta $D021
+	sta BG0_COLOR
 	ldy #0		; fade screen chars
-.1	lda $D800,y
+.1	lda COLORMEM,y
 	jsr .getcolor
-	sta $D800,y
-	lda $D900,y
+	sta COLORMEM,y
+	lda COLORMEM+$100,y
 	jsr .getcolor
-	sta $D900,y
-	lda $DA00,y
+	sta COLORMEM+$100,y
+	lda COLORMEM+$200,y
 	jsr .getcolor
-	sta $DA00,y
-	lda $DAE9,y
+	sta COLORMEM+$200,y
+	lda COLORMEM+$AE9,y
 	jsr .getcolor
-	sta $DAE9,y
+	sta COLORMEM+$AE9,y
 	dey
 	bne .1
 	rts
@@ -232,7 +232,7 @@ DrawPicMap	subroutine
 	bne .1		;  no, do more
 	lda CursorPos	; get ready for next row
 	clc
-	adc #40
+	adc #SCREEN_WIDTH
 	bcc .3
 	inc CursorPos+1
 	inc ColorPos+1
@@ -269,7 +269,7 @@ DrawLevelToOffscreen	subroutine
 	
 	lda RoughScroll		; setup topLeft of level memory to copy
 	sta .curLvl+1
-	lda #$4A
+	lda #>CurLevel      ; decompressed level data block
 	sta .curLvl+2
 	
 	ldx #>Screen1		; if current page = 0, copy to $2C00(offscreen)
@@ -297,12 +297,12 @@ DrawLevelToOffscreen	subroutine
 
 
 	; copy level/colors to offscreen
-.nxtRow	ldy #39			; 2 cycle
-.curLvl	lda $4A00,y		; 4
-.scnPtr	sta $FF00,y		; 4-5
+.nxtRow	ldy #SCREEN_WIDTH-1			; 2 cycle
+.curLvl	lda $FFFF,y		; 4   - self-modifying base addr
+.scnPtr	sta $FFFF,y		; 4-5 - self-modifying base addr
 	tax			; 2
-.clrDat	lda $FFFF,x		; 4
-.clrPtr	sta $FF00,y		; 4-5
+.clrDat	lda $FFFF,x		; 4   - self-modifying base addr
+.clrPtr	sta $FFFF,y		; 4-5 - self-modifying base addr
 
 	dey			; do a row
 	bpl .curLvl
@@ -310,7 +310,7 @@ DrawLevelToOffscreen	subroutine
 	inc .curLvl+2		; add 256 to get next row of level
 	lda .scnPtr+1		; add 40 to get next row of screen, color
 	clc
-	adc #40
+	adc #SCREEN_WIDTH
 	bcc .1
 	inc .scnPtr+2
 	inc .clrPtr+2
@@ -318,7 +318,7 @@ DrawLevelToOffscreen	subroutine
 	sta .clrPtr+1
 	
 	lda .curLvl+2
-	cmp #$5C
+	cmp #(>CurLevel + SCREEN_ROWS)
 	bne .nxtRow
 
 	if 0

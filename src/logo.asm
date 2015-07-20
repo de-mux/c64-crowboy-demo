@@ -1,17 +1,32 @@
 ;Commodore 64 Logo by Eric Odland
 ;This displays an animated Commodore 64 logo
 
+; FIXME: base these on values in boot.a
+LOGO_VIC_BANK = $4000
+LOGO_SPRITE_MEM_START = LOGO_VIC_BANK + $1000
+LOGO_CHARSET_MEM_START = LOGO_VIC_BANK + $3800
+LOGO_CHARSET_MEM_DEST = LOGO_CHARSET_MEM_START + $200  ; char 64
+
+LOGO_SCREEN_BANK_START = $C00
+LOGO_SCREEN_DRAW_X = 16
+LOGO_SCREEN_DRAW_Y = 8
+LOGO_SCREEN_DRAW_ORIGIN = LOGO_VIC_BANK + LOGO_SCREEN_BANK_START + (40*LOGO_SCREEN_DRAW_Y + LOGO_SCREEN_DRAW_X)  ; row 8, col 16
+
+LOGO_SPR_POINTERS = LOGO_VIC_BANK + LOGO_SCREEN_BANK_START + $3F8
+    ECHO LOGO_SPR_POINTERS
+
 C64LOGO	subroutine
-	LDA #<.SPR	;copy sprite data to bank 64-
+    ;copy sprite data to bank 64-
+	LDA #<.SPR	
 	LDY #>.SPR
 	STA Temp
 	STY Temp+1
-	LDA #$00
-	LDY #$10
+	LDA #<LOGO_SPRITE_MEM_START
+	LDY #>LOGO_SPRITE_MEM_START
 	STA Temp2
 	STY Temp2+1
 	LDY #0
-.LOOP1	LDA (Temp),Y		;get byte
+.LOOP1	LDA (Temp),Y	;get byte
 	CMP #$F2		;exit if done
 	BEQ .ROUT0
 	CMP #$F1		;if row of zeroes, expand
@@ -37,20 +52,24 @@ C64LOGO	subroutine
 	BNE .LOOP1
 	INC Temp+1
 	JMP .LOOP1
+
 ;COPY C64 LOGO CHAR DATA, turn it upside down
 .ROUT0	LDX #$90	;copy logo char data
 .C2	DEX
 	BEQ .ROUT0B
 	LDA .LOGO-1,X
-	STA $39FF,X	;char 64
+	;STA $39FF,X	;char 64
+	STA LOGO_CHARSET_MEM_DEST-1,X
 	JMP .C2
 .ROUT0B	LDA #$90
-	LDY #$3A
+	;LDY #$3A
+    LDY #>LOGO_CHARSET_MEM_DEST
 	STA Temp
 	STY Temp+1
 	LDX #0		;turn it upside down for chars 82-99?
 	LDY #7
-.C3	LDA $3A00,X
+;.C3	LDA $3A00,X
+.C3	LDA LOGO_CHARSET_MEM_DEST,X
 	STA (Temp),Y
 	INX
 	CPX #$8F
@@ -81,8 +100,10 @@ C64LOGO	subroutine
 	;lda #%00110100
 	;sta $1
 	
-	LDA #$50	;screen loc to copy to
-	LDY #$05
+	;LDA #$50	;screen loc to copy to
+	;LDY #$05
+    LDA #<LOGO_SCREEN_DRAW_ORIGIN
+    LDY #>LOGO_SCREEN_DRAW_ORIGIN
 	STA Temp
 	STY Temp+1
 	LDY #$D9	;color memory
@@ -131,7 +152,7 @@ C64LOGO	subroutine
 .L4	DEX
 	BMI .ROUT3
 	LDA .SPRP,X
-	STA SPRDATA,X
+	STA LOGO_SPR_POINTERS,X
 	JMP .L4
 .ROUT3	LDX #$07	;set sprite colors
 .L5	DEX
@@ -151,7 +172,7 @@ C64LOGO	subroutine
 	LDX #5
 .L6A	DEX
 	BMI .L6
-	INC SPRDATA,X
+	INC LOGO_SPR_POINTERS,X
 	JMP .L6A
 .L6	CPY #3
 	BNE .L7
