@@ -11,18 +11,18 @@
 ;
 SCREEN_WIDTH = 40
 SCREEN_ROWS = 18
-	
-; constants
-kSetBit:		; used to set a bit to 0-7
-	DC.B $1, $2, $4, $8, $10, $20, $40, $80
-kResetBit:		; used to reset a bit to 0-7
-	DC.B $FE, $FD, $FB, $F7, $EF, $DF, $BF, $7F
 
-	; for ScreenUpdate
-S_spriteDataPtr:	;sprite data pointer for right-facing sprite
-	DS.B 8		;  add 1 to get left-facing version
-S_XYPos	DS.W 8
-S_XMSB	DS.B 1
+; constants
+kSetBit:                ; used to set a bit to 0-7
+        DC.B $1, $2, $4, $8, $10, $20, $40, $80
+kResetBit:              ; used to reset a bit to 0-7
+        DC.B $FE, $FD, $FB, $F7, $EF, $DF, $BF, $7F
+
+        ; for ScreenUpdate
+S_spriteDataPtr:        ;sprite data pointer for right-facing sprite
+        DS.B 8          ;  add 1 to get left-facing version
+S_XYPos DS.W 8
+S_XMSB  DS.B 1
 S_enable DS.B 1
 
 
@@ -31,305 +31,312 @@ S_enable DS.B 1
 ;
 ; ******************* InitGameGraphics *******************
 ;
-; Purpose: 		Get graphics ready to play game
+; Purpose:              Get graphics ready to play game
 ;
-; Registers used: 	.A, .X
+; Registers used:       .A, .X
 ;
 ; How to use:
-;	Call this routine before the game starts
+;       Call this routine before the game starts
 ;
-InitGameGraphics	subroutine
-	jsr ClearBothScreens
-	lda #%00010000	; Multi-Color, 38 column display
-	sta VIC2
-	lda #%11111111	; Sprites multi-color
-	sta SPRMC
-	lda #10
-	sta SPR_MC0
-	lda #6
-	sta SPR_MC1
-	rts
+InitGameGraphics        subroutine
+        jsr ClearBothScreens
+        lda #%00010000  ; Multi-Color, 38 column display
+        sta VIC2
+        lda #%11111111  ; Sprites multi-color
+        sta SPRMC
+        lda #10
+        sta SPR_MC0
+        lda #6
+        sta SPR_MC1
+        rts
 
 ; ******************* ClearBothScreens *******************
 ;
-; Purpose: 		Clear both screens
+; Purpose:              Clear both screens
 ;
-; Registers used: 	.A, .X
+; Registers used:       .A, .X
 ;
 ; How to use:
-;	Call this routine.
+;       Call this routine.
 ;
 ClearBothScreens subroutine
-	lda #0
-	jsr SetPage		; set to screen page 0
-	jsr ClearScreen
-	jsr PageFlip
-	;lda #1
-	;jsr SetPage		; set to screen page 0
-	jsr ClearScreen
-	rts
+        lda #0
+        jsr SetPage             ; set to screen page 0
+        jsr ClearScreen
+        jsr PageFlip
+        ;lda #1
+        ;jsr SetPage            ; set to screen page 0
+        jsr ClearScreen
+        rts
 
+
+;PageFlip        subroutine
+;        lda Page
+;        eor #1
+;; dropthrough intentional
 
 ; ******************* SetPage *******************
 ;
-; Purpose: 		Set current page to Screen1 or Screen2
+; Purpose:              Set current page to Screen1 or Screen2
 ;
-; Registers used: 	.A
+; Registers used:       .A
 ;
 ; How to use:
-;	Load .A with 0 for page at screen 1, 1 for page at screen 2
-;	Call this routine before starting the game loop
+;       Load .A with 0 for page at screen 1, 1 for page at screen 2
+;       Call this routine before starting the game loop
 ;
-SetPage		subroutine
-	;eor #1
-	sta Page
-	lda VICMEM
-	and #%00001111
-	ldx Page
-	beq .1
-	ora #SCREEN_1_BANK_SELECT_BITS
-	ora #SCREEN_2_BANK_SELECT_BITS
-.1	sta VICMEM
-	
-	;jsr PageFlip
-	rts
+SetPage         subroutine
+        ;eor #1
+        sta Page
+        lda VICMEM
+        and #%00001111
+        ldx Page
+        bne .2
+        ora #SCREEN_1_BANK_SELECT_BITS
+        jmp .1
+.2      ora #SCREEN_2_BANK_SELECT_BITS
+.1      sta VICMEM
+
+        ;jsr PageFlip
+        rts
 
 
 ; ******************* PageFlip *******************
 ;
-; Purpose: 		Toggle page between screen memory at $0400 and
-;				screen memory at $2C00
+; Purpose:              Toggle page between screen memory at Screen1 and
+;                               screen memory at Screen2
 ;
-; Registers used: 	.A, .X
+; Registers used:       .A, .X
 ;
 ; How to use:
-;	Make sure Page represents the current screen address(0=$0400, >0=$2C00).
-;	Call this routine.
-;	
-PageFlip	subroutine
-	lda VICMEM
-	and #%00001111
-	ora #SCREEN_1_BANK_SELECT_BITS
-	ldx Page
-	bne .1
-	ora #SCREEN_2_BANK_SELECT_BITS
-.1	sta VICMEM
-	txa
-	eor #1		; toggle Page #
-	sta Page
-	rts
+;       Make sure Page represents the current screen address(0=Screen1, >0=Screen2).
+;       Call this routine.
+;
+PageFlip        subroutine
+        lda VICMEM
+        and #%00001111
+        ldx Page
+        beq .1
+        ora #SCREEN_1_BANK_SELECT_BITS
+        jmp .2
+.1      ora #SCREEN_2_BANK_SELECT_BITS
+.2      sta VICMEM
+        txa
+        eor #1          ; toggle Page #
+        sta Page
+        rts
 
 
 ; ******************* FadeScreen *******************
 ;
-; Purpose: 		Fade the screen out
+; Purpose:              Fade the screen out
 ;
-; Registers used: 	.A, .X, .Y
+; Registers used:       .A, .X, .Y
 ;
 ; How to use:
-;	Each time you call this routine the screen gets a shade darker.
+;       Each time you call this routine the screen gets a shade darker.
 ;
-FadeScreen	subroutine
-	lda BORDER_COLOR
-	jsr .getcolor
-	sta BORDER_COLOR
-	lda BG0_COLOR
-	jsr .getcolor
-	sta BG0_COLOR
-	ldy #0		; fade screen chars
-.1	lda COLORMEM,y
-	jsr .getcolor
-	sta COLORMEM,y
-	lda COLORMEM+$100,y
-	jsr .getcolor
-	sta COLORMEM+$100,y
-	lda COLORMEM+$200,y
-	jsr .getcolor
-	sta COLORMEM+$200,y
-	lda COLORMEM+$AE9,y
-	jsr .getcolor
-	sta COLORMEM+$AE9,y
-	dey
-	bne .1
-	rts
+FadeScreen      subroutine
+        lda BORDER_COLOR
+        jsr .getcolor
+        sta BORDER_COLOR
+        lda BG0_COLOR
+        jsr .getcolor
+        sta BG0_COLOR
+        ldy #0          ; fade screen chars
+.1      lda COLORMEM,y
+        jsr .getcolor
+        sta COLORMEM,y
+        lda COLORMEM+$100,y
+        jsr .getcolor
+        sta COLORMEM+$100,y
+        lda COLORMEM+$200,y
+        jsr .getcolor
+        sta COLORMEM+$200,y
+        lda COLORMEM+$AE9,y
+        jsr .getcolor
+        sta COLORMEM+$AE9,y
+        dey
+        bne .1
+        rts
 .getcolor:
-	and #%00001111
-	tax
-	lda .colors,x
-	rts
-.colors	DC 0,15,9,14,11,0,0,8,9,0,2,0,11,5,6,12
+        and #%00001111
+        tax
+        lda .colors,x
+        rts
+.colors DC 0,15,9,14,11,0,0,8,9,0,2,0,11,5,6,12
 
 
 ; ******************* DrawPic *******************
 ;
-; Purpose: 		Draw a pic from consecutive chars at current text cursor pos
+; Purpose:              Draw a pic from consecutive chars at current text cursor pos
 ;
-; Registers used: 	.A, .X, .Y
+; Registers used:       .A, .X, .Y
 ;
-; Memory Used:		Temp, Temp+1, Temp2
+; Memory Used:          Temp, Temp+1, Temp2
 ;
 ; How to use:
-;	Set cursor to desired top-left of picture with SMPlot.
-;	Load .A with the first character.
-;	Load .X with the width in chars.
-;	Load .Y with the height.
+;       Set cursor to desired top-left of picture with SMPlot.
+;       Load .A with the first character.
+;       Load .X with the width in chars.
+;       Load .Y with the height.
 ;
-DrawPic	subroutine
-	sty Temp2	; temporary storage of A/X/Y
-	stx Temp+1
-	sta Temp
-.2	ldy #0
-.1	sta (CursorPos),y ; copy char to screen
-	lda CursorColor	  ; do color
-	sta (ColorPos),y
-	inc Temp	; next char
-	lda Temp
-	iny		; next screen pos
-	dex		; end of row?
-	bne .1		;  no, do more
-	dec Temp2	; last row?
-	beq .done	;  yeahm
-	lda CursorPos	; next row
-	clc
-	adc #40
-	bcc .3
-	inc CursorPos+1
-	inc ColorPos+1
-.3	sta CursorPos
-	sta ColorPos
-	ldx Temp+1
-	lda Temp
-	jmp .2
-.done	rts
+DrawPic subroutine
+        sty Temp2       ; temporary storage of A/X/Y
+        stx Temp+1
+        sta Temp
+.2      ldy #0
+.1      sta (CursorPos),y ; copy char to screen
+        lda CursorColor   ; do color
+        sta (ColorPos),y
+        inc Temp        ; next char
+        lda Temp
+        iny             ; next screen pos
+        dex             ; end of row?
+        bne .1          ;  no, do more
+        dec Temp2       ; last row?
+        beq .done       ;  yeahm
+        lda CursorPos   ; next row
+        clc
+        adc #SCREEN_WIDTH
+        bcc .3
+        inc CursorPos+1
+        inc ColorPos+1
+.3      sta CursorPos
+        sta ColorPos
+        ldx Temp+1
+        lda Temp
+        jmp .2
+.done   rts
 
 ; ******************* DrawPicMap *******************
 ;
-; Purpose: 		Draw a pic from a character map(terminated by 0 a byte)
-;			 at current text cursor pos.
+; Purpose:              Draw a pic from a character map(terminated by 0 a byte)
+;                        at current text cursor pos.
 ;
-; Registers used: 	.A, .X, .Y
+; Registers used:       .A, .X, .Y
 ;
-; Memory Used:		Temp, Temp+1, Temp2
+; Memory Used:          Temp, Temp+1, Temp2
 ;
 ; How to use:
-;	Set cursor to desired top-left of picture with SMPlot.
-;	Load .A/.X with ptr to char map
-;	Load .Y with the width in chars.
+;       Set cursor to desired top-left of picture with SMPlot.
+;       Load .A/.X with ptr to char map
+;       Load .Y with the width in chars.
 ;Note: 0 <= .Y <= 40
 ;
-DrawPicMap	subroutine
-	sta Temp
-	stx Temp+1
-	sty Temp2	; temporary storage of A/X/Y
-.2	ldy #0
-.1	lda (Temp),y	; get char from map
-	beq .done	; 0 terminates char map
-	sta (CursorPos),y ; copy char to screen
-	lda CursorColor	  ; do color
-	sta (ColorPos),y
-	iny		; next screen pos
-	cpy Temp2	; end of row?
-	bne .1		;  no, do more
-	lda CursorPos	; get ready for next row
-	clc
-	adc #SCREEN_WIDTH
-	bcc .3
-	inc CursorPos+1
-	inc ColorPos+1
-.3	sta CursorPos
-	sta ColorPos
-	lda Temp
-	clc
-	adc Temp2
-	bcc .4
-	inc Temp+1
-.4	sta Temp
-	jmp .2
-.done	rts
+DrawPicMap      subroutine
+        sta Temp
+        stx Temp+1
+        sty Temp2       ; temporary storage of A/X/Y
+.2      ldy #0
+.1      lda (Temp),y    ; get char from map
+        beq .done       ; 0 terminates char map
+        sta (CursorPos),y ; copy char to screen
+        lda CursorColor   ; do color
+        sta (ColorPos),y
+        iny             ; next screen pos
+        cpy Temp2       ; end of row?
+        bne .1          ;  no, do more
+        lda CursorPos   ; get ready for next row
+        clc
+        adc #SCREEN_WIDTH
+        bcc .3
+        inc CursorPos+1
+        inc ColorPos+1
+.3      sta CursorPos
+        sta ColorPos
+        lda Temp
+        clc
+        adc Temp2
+        bcc .4
+        inc Temp+1
+.4      sta Temp
+        jmp .2
+.done   rts
 
 
 ; ******************* DrawLevelToOffscreen *******************
 ;
-; Purpose: 		Draw 40x18 view of the current level to offscreen area
-;			 as well as 40x18 offscreen color area
+; Purpose:              Draw 40x18 view of the current level to offscreen area
+;                        as well as 40x18 offscreen color area
 ;
-; Registers used: 	.A, .X, .Y
+; Registers used:       .A, .X, .Y
 ;
-; Memory Used:		RoughScroll, Screen1 or Screen 2, Colors1 or Colors2,
-;				OffscreenColor
+; Memory Used:          RoughScroll, Screen1 or Screen 2, Colors1 or Colors2,
+;                               OffscreenColor
 ;
 ; How to use:
-;	Setup RoughScroll.
-;	Make sure Page is correct.
-;	Make sure a level is loaded.
-;	Call this routine.
+;       Setup RoughScroll.
+;       Make sure Page is correct.
+;       Make sure a level is loaded.
+;       Call this routine.
 ;
-DrawLevelToOffscreen	subroutine
-	;setup self-modifying code
-	
-	lda RoughScroll		; setup topLeft of level memory to copy
-	sta .curLvl+1
-	lda #>CurLevel      ; decompressed level data block
-	sta .curLvl+2
-	
-	ldx #>Screen1		; if current page = 0, copy to $2C00(offscreen)
-	lda Page		; if current page = 1, copy to $0400(offscreen)
-	bne .2
-	ldx #>Screen2
-.2	stx .scnPtr+2
-	lda #0
-	sta .scnPtr+1
-	
-	ldx #<Colors1		; if using colorset 1, use Colors1
-	ldy #>Colors1		;	else, use Colors2
-	lda LevelHeaderFlags
-	lsr
-	bcc .3
-	ldx #<Colors2
-	ldy #>Colors2
-.3	stx .clrDat+1
-	sty .clrDat+2
-	
-	lda #<OffscreenColor	; get ready to draw to offscreen color area
-	ldy #>OffscreenColor	;  (OffscreenColor must be a multiple of $100, or
-	sta .clrPtr+1		; 	routine won't work right.)
-	sty .clrPtr+2
+DrawLevelToOffscreen    subroutine
+        ;setup self-modifying code
+
+        lda RoughScroll         ; setup topLeft of level memory to copy
+        sta .curLvl+1
+        lda #>CurLevel      ; decompressed level data block
+        sta .curLvl+2
+
+        ldx #>Screen1           ; if current page = 0, copy to $2C00(offscreen)
+        lda Page                ; if current page = 1, copy to $0400(offscreen)
+        bne .2
+        ldx #>Screen2
+.2      stx .scnPtr+2
+        lda #0
+        sta .scnPtr+1
+
+        ldx #<Colors1           ; if using colorset 1, use Colors1
+        ldy #>Colors1           ;       else, use Colors2
+        lda LevelHeaderFlags
+        lsr
+        bcc .3
+        ldx #<Colors2
+        ldy #>Colors2
+.3      stx .clrDat+1
+        sty .clrDat+2
+
+        lda #<OffscreenColor    ; get ready to draw to offscreen color area
+        ldy #>OffscreenColor    ;  (OffscreenColor must be a multiple of $100, or
+        sta .clrPtr+1           ;       routine won't work right.)
+        sty .clrPtr+2
 
 
-	; copy level/colors to offscreen
-.nxtRow	ldy #SCREEN_WIDTH-1			; 2 cycle
-.curLvl	lda $FFFF,y		; 4   - self-modifying base addr
-.scnPtr	sta $FFFF,y		; 4-5 - self-modifying base addr
-	tax			; 2
-.clrDat	lda $FFFF,x		; 4   - self-modifying base addr
-.clrPtr	sta $FFFF,y		; 4-5 - self-modifying base addr
+        ; copy level/colors to offscreen
+.nxtRow ldy #SCREEN_WIDTH-1                     ; 2 cycle
+.curLvl lda $FFFF,y             ; 4   - self-modifying base addr
+.scnPtr sta $FFFF,y             ; 4-5 - self-modifying base addr
+        tax                     ; 2
+.clrDat lda $FFFF,x             ; 4   - self-modifying base addr
+.clrPtr sta $FFFF,y             ; 4-5 - self-modifying base addr
 
-	dey			; do a row
-	bpl .curLvl
+        dey                     ; do a row
+        bpl .curLvl
 
-	inc .curLvl+2		; add 256 to get next row of level
-	lda .scnPtr+1		; add 40 to get next row of screen, color
-	clc
-	adc #SCREEN_WIDTH
-	bcc .1
-	inc .scnPtr+2
-	inc .clrPtr+2
-.1	sta .scnPtr+1
-	sta .clrPtr+1
-	
-	lda .curLvl+2
-	cmp #(>CurLevel + SCREEN_ROWS)
-	bne .nxtRow
+        inc .curLvl+2           ; add 256 to get next row of level
+        lda .scnPtr+1           ; add 40 to get next row of screen, color
+        clc
+        adc #SCREEN_WIDTH
+        bcc .1
+        inc .scnPtr+2
+        inc .clrPtr+2
+.1      sta .scnPtr+1
+        sta .clrPtr+1
 
-	if 0
-	;; TEST CODE ;;
-	lda FineScroll
-	sec
-	sbc #4
-	bne .tst
-	inc RoughScroll
-.tst:	and #%00000111
-	sta FineScroll
-	endif
+        lda .curLvl+2
+        cmp #(>CurLevel + SCREEN_ROWS)
+        bne .nxtRow
 
-	rts
+        if 0
+        ;; TEST CODE ;;
+        lda FineScroll
+        sec
+        sbc #4
+        bne .tst
+        inc RoughScroll
+.tst:   and #%00000111
+        sta FineScroll
+        endif
+
+        rts

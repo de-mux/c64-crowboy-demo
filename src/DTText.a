@@ -7,124 +7,122 @@
 ;
 ;
 ; ZeroPage locations used:
-;	CursorPos, CursorColor
+;       CursorPos, CursorColor
 
 ;Chars
-SpaceBar	EQU $20
-copyright_char	EQU 47
-tm_char		EQU 42
+SpaceBar        EQU $20
+copyright_char  EQU 47
+tm_char         EQU 42
 
 
 ; ******************* TextInit *******************
 ;
-; Purpose: 		Copies alphanumeric characters(0-63) from Charset1 to Charset2
+; Purpose:              Copies alphanumeric characters(0-63) from Charset1 to Charset2
 ;
-; Registers used: 	.A, .X
+; Registers used:       .A, .X
 ;
-; Memory used:		Charset1,Charset2
+; Memory used:          Charset1,Charset2
 ;
 ; How to use:
-;	Call this routine.
-TextInit	subroutine
-	ldx #0
-	txa
-.1	lda Charset1,x
-	sta Charset2,x
-	lda Charset1+$100,x
-	sta Charset2+$100,x
-	dex
-	bne .1
-	rts
-	
-	
-	
+;       Call this routine.
+TextInit        subroutine
+        ldx #0
+        txa
+.1      lda Charset1,x
+        sta Charset2,x
+        lda Charset1+$100,x
+        sta Charset2+$100,x
+        dex
+        bne .1
+        rts
+
+
+
 ; ******************* SMChrout *******************
 ;
-; Purpose: 		output an ASCII character to screen
+; Purpose:              output an ASCII character to screen
 ;
-; Registers used: 	.A, .X
+; Registers used:       .A, .X
 ;
-; Memory used:		CursorPos,CursorColor,ColorPos
+; Memory used:          CursorPos,CursorColor,ColorPos
 ;
 ; How to use:
-;	Load .A with desired character. Call this routine.
-;	
-SMChrout	subroutine
-	ldx #0
-	cmp #64
-	bmi .1
-	sec
-	sbc #64
-.1	sta (CursorPos,x)
-	;lda CursorPos	;determine corresponding color memory
-	;sta Temp2
-	;lda CursorPos+1
-	;clc
-	;adc #$D4
-	;sta Temp2+1
-	lda CursorColor	; color character
-	sta (ColorPos,x)
-	
-	inc CursorPos	; next position
-	inc ColorPos
-	bne .2
-	inc CursorPos+1
-	inc ColorPos+1
-.2	rts
+;       Load .A with desired character. Call this routine.
+;
+SMChrout        subroutine
+        ldx #0
+        cmp #64
+        bmi .1
+        sec
+        sbc #64
+.1      sta (CursorPos,x)
+        ;lda CursorPos  ;determine corresponding color memory
+        ;sta Temp2
+        ;lda CursorPos+1
+        ;clc
+        ;adc #$D4
+        ;sta Temp2+1
+        lda CursorColor ; color character
+        sta (ColorPos,x)
 
+        inc CursorPos   ; next position
+        inc ColorPos
+        bne .2
+        inc CursorPos+1
+        inc ColorPos+1
+.2      rts
 
 
 ; ******************* BackSpace *******************
 ;
-; Purpose: 		put cursor/color mem pointers back 1 byte
+; Purpose:              put cursor/color mem pointers back 1 byte
 ;
-; Registers used: 	.A
+; Registers used:       .A
 ;
-; Memory used:		CursorPos,ColorPos
+; Memory used:          CursorPos,ColorPos
 ;
 ; How to use:
-;	Call this routine. Acts like a "backspace"
+;       Call this routine. Acts like a "backspace"
 ;
-BackSpace	subroutine
-	lda CursorPos
-	bne .1
-	dec CursorPos+1
-	dec ColorPos+1
-.1	dec CursorPos
-	dec ColorPos
-	rts
-
-	
+BackSpace       subroutine
+        lda CursorPos
+        bne .1
+        dec CursorPos+1
+        dec ColorPos+1
+.1      dec CursorPos
+        dec ColorPos
+        rts
 
 
 ; ******************* Print *******************
 ;
-; Purpose: 		print a C-string(terminated by zero) to the screen
+; Purpose:              print a C-string(terminated by zero) to the screen
 ;
-; Registers used: 	.A, .Y
+; Registers used:       .A, .Y
 ;
-; Memory used:		Temp(Ptr), Temp2(by SMChrout)
+; Memory used:          Temp(Ptr), Temp2(by SMChrout)
 ;
-; Subroutines called:	SMChrout
+; Subroutines called:   SMChrout
 ;
 ; How to use:
-;	Load .A/.Y with pointer to C-string (<256 bytes). Call this routine.
-;	Note: leaves ptr to address AFTER C-string in Temp
+;       Load .A/.Y with pointer to C-string (<256 bytes). Call this routine.
+;       Note: leaves ptr to address AFTER C-string in Temp
 ;
-Print	subroutine
-	STA Temp	;prints a row of ASCII chars until it gets
-	STY Temp+1	;	byte 0
-	LDY #0
-.get	LDA (Temp),y
-	BEQ .nxt
-	JSR SMChrout
-	INY
-	BNE .get
-.nxt 	INY
-	TYA
-	CLC
-	ADC Temp
-	BCC .end
-	INC Temp+1
-.end	STA Temp
-	RTS
+Print   subroutine
+        STA Temp        ;prints a row of ASCII chars until it gets
+        STY Temp+1      ;       byte 0
+        LDY #0
+.get    LDA (Temp),y
+        BEQ .nxt
+        JSR SMChrout
+        INY
+        BNE .get
+.nxt    INY
+        TYA
+        CLC
+        ADC Temp
+        BCC .end
+        INC Temp+1
+.end    STA Temp
+        RTS
+

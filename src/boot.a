@@ -27,182 +27,180 @@ CHARSET_2_START_LOC = $3800
 CHARSET_2_BANK_SELECT_BITS = CHARSET_2_START_LOC / $400
 
 
-	processor 6502
+        processor 6502
 
 
-; ************ ZERO PAGE VARIABLES ***********	
-	SEG.U ZeroPage
-	org $E2
+; ************ ZERO PAGE VARIABLES ***********
+        SEG.U ZeroPage
+        org $E2
 ZeroPage:
 ;Menu
-MenuMode	DC.B 0	; what mode the menu is in
+MenuMode        DC.B 0  ; what mode the menu is in
 
 ; Timing
-FrameToggle	DC.B 0	; toggles between 0/1 every frame (so game is 30 fps)
+FrameToggle     DC.B 0  ; toggles between 0/1 every frame (so game is 30 fps)
 VProgramLoopInterrupt DC.W 0 ; Vector: where screenupdate will set the next interrupt
-NextIRQCompare	DC.B 0	; Next interrupt scanline number
+NextIRQCompare  DC.B 0  ; Next interrupt scanline number
 
 ; ScreenUpdate
-RoughScroll	DC.B 0	; current level rough scroll pos(upper-left lo-byte)
-FineScroll	DC.B 0	; smooth X scroll
-Page		DC.B 0	; what page we're on (0 or 1)
+RoughScroll     DC.B 0  ; current level rough scroll pos(upper-left lo-byte)
+FineScroll      DC.B 0  ; smooth X scroll
+Page            DC.B 0  ; what page we're on (0 or 1)
 
 ; Screen
 ScreenUpdateFlag DC.B 0 ; 1 means screen needs updating
-CursorColor	DC.B 0
-CursorPos	DC.W 0	; position of cursor in screen memory
-ColorPos	DC.W 0	; corresponding color location for cursor
+CursorColor     DC.B 0
+CursorPos       DC.W 0  ; position of cursor in screen memory
+ColorPos        DC.W 0  ; corresponding color location for cursor
 
 ; General
-Temp		DC.W 0	; temporary area for storing word addresses
-Temp2		DC.W 0
-Temp3		DC.W 0
+Temp            DC.W 0  ; temporary area for storing word addresses
+Temp2           DC.W 0
+Temp3           DC.W 0
 
 ; Game
-LevelHeaderFlags DC.B 0	; see Levels below for meaning of bits
-ResetFlag	DC.B 0	; whether or not game has been reset
-Mode		DC.B 0	; mode of game (see DTGame.a)
-NextLevel	DC.W 0	; ptr to the next level
+LevelHeaderFlags DC.B 0 ; see Levels below for meaning of bits
+ResetFlag       DC.B 0  ; whether or not game has been reset
+Mode            DC.B 0  ; mode of game (see DTGame.a)
+NextLevel       DC.W 0  ; ptr to the next level
 
 ; Music
-MusicZP		DC.B 0,0,0,0,0,0	; used by music routine ($FA-$FF)
+MusicZP         DC.B 0,0,0,0,0,0        ; used by music routine ($FA-$FF)
 
 
 
-	include "Macros.a"
-    include "system.a"
+        include "Macros.a"
+        include "system.a"
 
 ; ************** BASIC HEADER ***************
-	SEG header
-	org $0801
-	DC.W BASEND,2002
-	DC $9E
-	DC "2061"
-	DC 0
-BASEND	DC.W 0
+        SEG header
+        org $0801
+        DC.W BASEND,2002
+        DC $9E
+        DC "2061"
+        DC 0
+BASEND  DC.W 0
 
 
-; ****************    CODE   *****************	
-	SEG code
-	org 2061
-Start:	sei
-	
-	ldx #$FF		    ; reset stack
-	txs
-	cld			        ; clear decimal mode
-	
-	ldx #($FF-ZeroPage)	; reset zeropage variables
-	lda #0
-loop	sta ZeroPage,x
-	dex
-	bpl loop
+; ****************    CODE   *****************
+        SEG code
+        org 2061
+Start:  sei
 
-	; BASIC ROM($A000-$BFFF)/KERNAL ROM($E000-$FFFF) out
-	lda #%00110101
-	sta PROCESSOR_PORT
+        ldx #$FF                    ; reset stack
+        txs
+        cld                             ; clear decimal mode
 
-    ; do screen fade out
-	lda #5    ; wait time between fade
-	sta $0337
-fader	pha
-	jsr FadeScreen
-	jsr Wait
-	pla
-	tax
-	dex
-	txa
-	bne fader
-	;lda #0			    ; black screen
-	;sta $D020
-	;sta $D021
+        ldx #($FF-ZeroPage)     ; reset zeropage variables
+        lda #0
+loop    sta ZeroPage,x
+        dex
+        bpl loop
+
+        ; BASIC ROM($A000-$BFFF)/KERNAL ROM($E000-$FFFF) out
+        lda #%00110101
+        sta PROCESSOR_PORT
+
+        ; do screen fade out
+        lda #5
+.fader  pha
+        jsr FadeScreen
+        ldx #5    ; wait time between fade
+        jsr Wait
+        pla
+        sec
+        sbc #1
+        bne .fader
+        ;lda #0                     ; black screen
+        ;sta $D020
+        ;sta $D021
 
 
-	jsr ClearScreen		;clear screen
-	spr_disable_all 	;turn off all sprites
-    ; set VIC-II bank
-    lda CIA2
-    and #%11111100
-    ora #VIC_BANK_SELECT_BITS
-    sta CIA2
+        jsr ClearScreen             ;clear screen
+        spr_disable_all         ;turn off all sprites
+        ; set VIC-II bank
+        lda CIA2
+        and #%11111100
+        ora #VIC_BANK_SELECT_BITS
+        sta CIA2
 
-	;lda #%00011110		; VideoMatrix = $0400, Char = $3800
-    lda #(SCREEN_1_BANK_SELECT_BITS + CHARSET_2_BANK_SELECT_BITS)
-	sta VICMEM
-	jsr C64LOGO		    ; show C64 Logo
-	jsr TextInit		; init text
-	lda #ExitToMainMenu ; get ready for main menu mode
-	jsr SetMode
-	jmp InitIRQ		    ; setup IRQ interrupt
-	
-	ECHO "Writing Code Segment 1:     $080d -",.-1
+        lda #(SCREEN_1_BANK_SELECT_BITS + CHARSET_2_BANK_SELECT_BITS)
+        sta VICMEM
+        jsr C64LOGO             ; show C64 Logo
+        jsr TextInit            ; init text
+        lda #ExitToMainMenu     ; get ready for main menu mode
+        jsr SetMode
+        jmp InitIRQ             ; setup IRQ interrupt
 
-	include "logo.asm"
-	
-	ECHO "Writing Logo Code:                -",.-1," (",($1000 - .), "bytes remaining. )"
+        ECHO "Writing Code Segment 1:     $080d -",.-1
 
-	DC "OH, WHAT A MEAL!",0
+        include "logo.a"
+
+        ECHO "Writing Logo Code:                -",.-1," (",($1000 - .), "bytes remaining. )"
+
+        DC "OH, WHAT A MEAL!",0
 copyright_string:
-	DC copyright_char
-	DC "2002 STONE MONKEY, INC.",0
+        DC copyright_char
+        DC "2002 STONE MONKEY, INC.",0
 
 
 ;**************** DOWNTOWN DATA ****************
-;	
-	SEG data
+;
+        SEG data
 ; ************* Offscreen Color Area ***************
-OffscreenColor = $0400		; this must be multiple of $100
-				;  for DrawLevelToOffscreen to work
+OffscreenColor = $0400          ; this must be multiple of $100
+                                ;  for DrawLevelToOffscreen to work
 
 
 ; ************* BG/Char Colors 1 & 2 ***************
 ;
-	org $1000,0
+        org $1000,0
 BGColors1:
 Colors1 = .-$3D    ;$3FC3
-	
-	incbin "chrset1.colortable"
-	
-	;$40C3
+
+        incbin "chrset1.colortable"
+
+        ;$40C3
 BGColors2:
 Colors2 = .-$3D    ;$4086
-	;incbin "chrset2.colortable"
-	
-	;$1186
-	; ***** Variable Space *****
-	
-	ECHO "Including 2 colortables:    $1000 -",.-1
+        ;incbin "chrset2.colortable"
+
+        ;$1186
+        ; ***** Variable Space *****
+
+        ECHO "Including 2 colortables:    $1000 -",.-1
 
 
 ; ************* Block data ***************
 ;
-	org $1200,0
+        org $1200,0
 BlockData:
 BlockSet1:
-	incbin "downtown1.blocks"
-	
-	ECHO "Including Block Data 1:     $1200 -",.-1
+        incbin "downtown1.blocks"
 
-BlockSet2:	
-	;incbin "downtown2.blocks"
-	ECHO "Including Block Data 2:           -",.-1
-	
-	
+        ECHO "Including Block Data 1:     $1200 -",.-1
+
+BlockSet2:
+        ;incbin "downtown2.blocks"
+        ECHO "Including Block Data 2:           -",.-1
+
+
 ; ************* 16 Compressed Levels ***************
 ; $1A00 - $397F
-	org $1A00,0
+        org $1A00,0
 ; Level header flag:
-;	Bit 0 - what char set to use
-;	Bit 1 - what block set to use
+;       Bit 0 - what char set to use
+;       Bit 1 - what block set to use
 Levels:
 Level1:
 LevelHeaderSize set .
 ;   Header
-	DC.B CHARSET_1_BANK_SELECT_BITS			; chrset to use(12=$7000, 14=$7800)
-	DC.W Level1		; ptr to next level
-	DC.B %00000000		; level flags (see above)
+        DC.B CHARSET_1_BANK_SELECT_BITS                 ; chrset to use(12=$7000, 14=$7800)
+        DC.W Level1             ; ptr to next level
+        DC.B %00000000          ; level flags (see above)
 LevelHeaderSize set . - LevelHeaderSize
 ;   Data
-	incbin "downtown1.level"
+        incbin "downtown1.level"
 ;Level 2
 ;Level 3
 ;Level 4
@@ -219,73 +217,77 @@ LevelHeaderSize set . - LevelHeaderSize
 ;Level 15
 ;Level 16
 
-	ECHO "Including",((.-$1A00)/1152),"Levels:        $1A00 -",.-1
+        ECHO "Including",((.-$1A00)/1152),"Levels:        $1A00 -",.-1
 ; ************* Screen 1 & 2 ***************
 ;
 Screen1 = VIC_BANK_START_LOC + SCREEN_1_BANK_START_LOC   ;$4C00, was $0400
 Screen2 = VIC_BANK_START_LOC + SCREEN_2_BANK_START_LOC   ;$6C00, was $2C00
+SCREEN_1_SPR_PTRS = Screen1 + SPRDATA_OFFSET
+SCREEN_2_SPR_PTRS = Screen2 + SPRDATA_OFFSET
 
 
 ; ************* Current Level Space ***************
 ;
-	org $3A00,0
+        org $3A00,0
 CurLevel:
-	ECHO "Defining Level Area:        $3a00 - $3bff"
+        ECHO "Defining Level Area:       ",.," - $4bff"
+        org $4C00,0
+CurLevelEnd = .-1
 
 
 ;**************** Sprites ****************
 ;
-	org $5000,0	; area for C64 logo sprites ($1000-$14BF)
+        org $5000,0     ; area for C64 logo sprites ($1000-$14BF)
 Sprites:
-	org $54C0,0 ; in-game sprites
-	;incbin SPRITE_DIR + "gamesprites.spr"
-	incbin "gamesprites.spr"
+        org $54C0,0 ; in-game sprites
+        ;incbin SPRITE_DIR + "gamesprites.spr"
+        incbin "gamesprites.spr"
 
-	ECHO "Including Sprite Data:      $5000 -",.-1
+        ECHO "Including Sprite Data:      $5000 -",.-1
 
 
 ; ************* Charsets 1 & 2 ***************
 ;
-	org $7000,0
-	ECHO "Including Character Sets:"
-Charset1:		; ($7000-$7800)
-	incbin "chrset1.chr"
-	ECHO "    Including chrset1.chr:  $7000 -",.-1
-	org $7800,0
-Charset2:		; ($7800-$7FFF)
-	org $7A00,0	; C64 logo chars ($7A00-$7B1F chars 64-99)
-	org $7B20,0	; Ping logo ($7B20-$7C4F chars 100-138)
-	incbin "pinglogo.chr"
-	ECHO "    Including pinglogo.chr: $7b20 -",.-1
-	org $7C50,0	;
-	
-;	incbin "chrset2.chr"
+        org $7000,0
+        ECHO "Including Character Sets:"
+Charset1:               ; ($7000-$7800)
+        incbin "chrset1.chr"
+        ECHO "    Including chrset1.chr:  $7000 -",.-1
+        org $7800,0
+Charset2:               ; ($7800-$7FFF)
+        org $7A00,0     ; C64 logo chars ($7A00-$7B1F chars 64-99)
+        org $7B20,0     ; Ping logo ($7B20-$7C4F chars 100-138)
+        incbin "pinglogo.chr"
+        ECHO "    Including pinglogo.chr: $7b20 -",.-1
+        org $7C50,0     ;
 
-	ECHO "    Including chrset2.chr:        -",.-1
+;       incbin "chrset2.chr"
+
+        ECHO "    Including chrset2.chr:        -",.-1
 
 
 ;**************** DOWNTOWN CODE ****************
-	SEG code
-	org $A6D0,0
+        SEG code
+        org $A6D0,0
 
-	include "DTScreen.a"
-	include "DTText.a"
-	include "DTGraphics.a"
-	include "DTMenu.a"
-	include "DTUtil.a"
-	include "DTGame.a"
-	include "DTObjects.a"
-	; information for sprite sequences, x offsets
-	include "DTSpriteInfo.a"
+        include "DTScreen.a"
+        include "DTText.a"
+        include "DTGraphics.a"
+        include "DTMenu.a"
+        include "DTUtil.a"
+        include "DTGame.a"
+        include "DTObjects.a"
+        ; information for sprite sequences, x offsets
+        include "DTSpriteInfo.a"
 
-	include "system.a"
-	
-	ECHO "Writing Code Segment 2:     $a6d0 -",.-1," (",($D000 - .),"bytes remaining. )"
-	ECHO ""
-	ECHO ""
-	
+        ;include "system.a"
+
+        ECHO "Writing Code Segment 2:     $a6d0 -",.-1," (",($D000 - .),"bytes remaining. )"
+        ECHO ""
+        ECHO ""
+
 ; ************* Music ***************
 ; $E000-$FFFF
-	org $E000
+        org $E000
 MusicInit:
 MusicPlay = .+3

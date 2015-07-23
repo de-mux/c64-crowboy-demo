@@ -4,6 +4,9 @@
 ; Processor memory locations
 PROCESSOR_PORT = $1
 
+; software interrupt vector(2 byte mem location), used by IRQ routine
+SOFT_INTERRUPT_VECT = $0314
+
 ; Special memory sections
 BASICSTART = $0801
 SCREENMEM  = $0400
@@ -16,6 +19,7 @@ CIA2       = $DD00
 KERNALROM  = $E000
 
 ; Sprites
+SPRDATA_OFFSET = $03F8
 SPRDATA    = $07F8  ;sprite data pointers
 SPR0X      = $D000  ;sprite 0-7 x and y positions
 SPR0Y      = $D001
@@ -57,6 +61,7 @@ BG2_COLOR  = $D023
 BG3_COLOR  = $D024
 SPR_MC0    = $D025  ;sprite multi-color 0
 SPR_MC1    = $D026  ;sprite multi-color 1
+SPR_COLORS = $D027
 SPR0C      = $D027  ;sprite 0-7 colors
 SPR1C      = $D028
 SPR2C      = $D029

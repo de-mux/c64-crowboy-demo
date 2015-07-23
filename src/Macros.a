@@ -123,18 +123,20 @@
 	ENDM
 	
 	MAC set_level	;set_level [byte level]
-	lda #<(Levels + ({1}-1)*(128*9+2))
+	lda #<(Levels + ({1}-1)*(LEVEL_PACKED_WIDTH*9+2))
 	sta NextLevel
-	lda #>(Levels + ({1}-1)*(128*9+2))
+	lda #>(Levels + ({1}-1)*(LEVEL_PACKED_WIDTH*9+2))
 	sta NextLevel+1
 	ENDM
 
 ; SCREEN SHIT _______________________________
+        ; set interrupt vector
+        ; NOTE: interrupts should be disabled before calling this
 	MAC set_interrupt
 	lda <{1}
-	sta $0314
+	sta SOFT_INTERRUPT_VECT
 	lda >{1}
-	sta $0315
+	sta SOFT_INTERRUPT_VECT + 1
 	ENDM
 	
 	MAC set_interrupt_buf

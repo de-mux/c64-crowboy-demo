@@ -9,8 +9,8 @@
 
 ; ******************* DATA *******************
 ;
-kSpriteGroundLevel = 164	; y position of sprites on ground level
-kRunSpeed = 5			; the speed at which characters run
+kSpriteGroundLevel = 164        ; y position of sprites on ground level
+kRunSpeed = 5                   ; the speed at which characters run
 ;
 ;;Actions
 run = 0
@@ -26,325 +26,324 @@ right = %00000000
 left = %00000010
 
 
-object_record:		; object records 0-7
+object_record:          ; object records 0-7
 ; record Object {
-;	byte info;	// Bit 0: active or inactive
-;			// Bit 1: facing(0=right)
-;			// Bit 2: newAction (whether a new action started)
-;   			//    other bits depend on what type of object
-;	byte type;
-;	byte currentAction;
-;	byte acceleration, velocity;
-;	ptr  actionArray;// points to the array of sprite data ptrs for various
-;    			 //    actions
-;	byte extraInfo;	  // extra info dependent of what type of object
+;       byte info;      // Bit 0: active or inactive
+;                       // Bit 1: facing(0=right)
+;                       // Bit 2: newAction (whether a new action started)
+;                       //    other bits depend on what type of object
+;       byte type;
+;       byte currentAction;
+;       byte acceleration, velocity;
+;       ptr  actionArray;// points to the array of sprite data ptrs for various
+;                        //    actions
+;       byte extraInfo;   // extra info dependent of what type of object
 ; };
 o_info:
-	DS.B 8
+        DS.B 8
 o_type:
-	DS.B 8
+        DS.B 8
 o_currentAction:
-	DS.B 8
+        DS.B 8
 ;o_acceleration:
-;	DS.B 8
+;       DS.B 8
 o_velX:
-	DS.B 8
+        DS.B 8
 o_velY:
-	DS.B 8
+        DS.B 8
 o_actionArrayLo:
-	DS.B 8
+        DS.B 8
 o_actionArrayHi:
-	DS.B 8
+        DS.B 8
 o_extraInfo:
-	DS.B 8
-	
-	
-	
+        DS.B 8
+
+
+
 ; ******* Object Definitions ********
 ;  defines what sprite data block to begin certain actions
 ;  for characters:
-;	0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
-;	5 - die, 6 - beingHit
+;       0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
+;       5 - die, 6 - beingHit
 ObjectPlayer:
-	DC.B 85, 83, 83, 83, 83, 83, 83
-	
-	
-	
+        DC.B 85, 83, 83, 83, 83, 83, 83
+
+
+
 ; ******************* CODE *******************
 ;
 ; ******************* SetupPlayer *******************
 ;
-; Purpose: 		Setup player in sprite 0
+; Purpose:              Setup player in sprite 0
 ;
-; Registers used: 	
+; Registers used:
 ;
 ; How to use:
-;	Call this routine when a level begins
+;       Call this routine when a level begins
 ;
-SetupPlayer	subroutine
-	jsr GenerateObject
-	DC.B 0			; info
-	DC.B 0			; type (0=player)
-;	DC.B 3			; 3 = standing
-	DC.B 0			; 0 = running
-	DC.B 0			; velX = 0
-	DC.B 0			; velY = 0
-	DC.W ObjectPlayer	; points to action array
-	DC.B 0			; no extra info
-	DC.B 0			; color
-	DC.B kSpriteGroundLevel	; YPos = 164
-	DC.W 160		; XPos = 160
-	DC.B 0			; Sprite 0
-	
-	;ldx #0
-	;lda #run
-	;ldy #right
-	;jsr RequestAction
-	
-	; get current action
-	ldx #0
-	lda o_actionArrayLo,x
-	ldy o_actionArrayHi,x
-	sta Temp
-	sty Temp+1
-	lda o_currentAction,x
-	tay
-	lda (Temp),y		; check sprite's image
-	ldy #0			; set sprite data ptr accordingly
-	sta S_spriteDataPtr,y
-	rts
-	
-	
+SetupPlayer     subroutine
+        jsr GenerateObject
+        DC.B 0                  ; info
+        DC.B 0                  ; type (0=player)
+;       DC.B 3                  ; 3 = standing
+        DC.B 0                  ; 0 = running
+        DC.B 0                  ; velX = 0
+        DC.B 0                  ; velY = 0
+        DC.W ObjectPlayer       ; points to action array
+        DC.B 0                  ; no extra info
+        DC.B 0                  ; color
+        DC.B kSpriteGroundLevel ; YPos = 164
+        DC.W 160                ; XPos = 160
+        DC.B 0                  ; Sprite 0
+
+        ;ldx #0
+        ;lda #run
+        ;ldy #right
+        ;jsr RequestAction
+
+        ; get current action
+        ldx #0
+        lda o_actionArrayLo,x
+        ldy o_actionArrayHi,x
+        sta Temp
+        sty Temp+1
+        lda o_currentAction,x
+        tay
+        lda (Temp),y            ; check sprite's image
+        ldy #0                  ; set sprite data ptr accordingly
+        sta S_spriteDataPtr,y
+        rts
+
+
 
 ; ******************* GenerateObject *******************
 ;
-; Purpose: 		Creates an object with specified characteristics
+; Purpose:              Creates an object with specified characteristics
 ;
-; Registers used: 	
+; Registers used:
 ;
 ; How to use:
-;	Make sure required data follows your JSR instruction in this order:
-;		info, type, currentAction, acceleration, velocity,
-;		actionArray, extraInfo, color, YPos, XPos, XMSB, 
-;		objectIndex(0-7)
-;	Call this routine when a level begins
+;       Make sure required data follows your JSR instruction in this order:
+;               info, type, currentAction, acceleration, velocity,
+;               actionArray, extraInfo, color, YPos, XPos, XMSB,
+;               objectIndex(0-7)
+;       Call this routine when a level begins
 ;
-GenerateObject	subroutine
-	pla			; get return address(points to data following
-	sta Temp		;   the JSR)
-	pla
-	sta Temp+1
-	inc Temp		; add 1 to pointer
-	bne .add
-	inc Temp+1
+; FIXME: create constants for all the indexes into an object record
+GenerateObject  subroutine
+        pla                     ; get return address(points to data following
+        sta Temp                ;   the JSR)
+        pla
+        sta Temp+1
+        inc Temp                ; add 1 to pointer
+        bne .add
+        inc Temp+1
 .add:
-	
-	ldy #12			; what is object's index?(0-7)
-	lda (Temp),y
-	tax			; store in x for later	
-	
-	; copy data into object record
-	;   (used by WorldUpdate)
-	ldy #0
-	lda (Temp),y
-	ora #1			; set bit 0 to 1.(active object)
-	sta o_info,x
-	iny
-	lda (Temp),y
-	sta o_type,x
-	iny
-	lda (Temp),y
-	sta o_currentAction,x
-	iny
-	lda (Temp),y
-	sta o_velX,x
-	iny
-	lda (Temp),y
-	sta o_velY,x
-	iny
-	lda (Temp),y
-	sta o_actionArrayLo,x
-	iny
-	lda (Temp),y
-	sta o_actionArrayHi,x
-	iny
-	lda (Temp),y
-	sta o_extraInfo,x
-	
-	
-	; set sprite color
-	ldy #8
-	lda (Temp),y
-	sta $D027,x
-	
-	; copy data into sprite record
-	;   (setup by WorldUpdate, copied to
-	;    VIC memory by ScreenUpdate)
-	lda kResetBit,x		; initially reset X MSB
-	and S_XMSB
-	sta S_XMSB
-	ldy #11			; get X MSB
-	lda (Temp),y
-	lsr
-	bcc .out1
-	lda kSetBit,x		; set sprite's X MSB bit
-	ora S_XMSB
-	sta S_XMSB
-.out1:	
-	; enable the sprite
-	lda kSetBit,x
-	ora S_enable
-	sta S_enable
-	
-	; copy X and Y positions
-	txa			; X = X * 2
-	asl
-	tax
-	dey			; get X pos
-	lda (Temp),y
-	sta S_XYPos,x
-	dey			; get Y pos
-	lda (Temp),y
-	inx
-	sta S_XYPos,x
-	
-	; set return address to instruction after data
-	lda Temp		; A = (Temp)+12
-	clc
-	adc #12
-	tax			; X = A
-	lda Temp+1		; A = (Temp+1)+C
-	adc #0
-	pha
-	txa
-	pha
-	
-	rts
+
+        ldy #12                 ; what is object's index?(0-7)
+        lda (Temp),y
+        tax                     ; store in x for later
+
+        ; copy data into object record
+        ;   (used by WorldUpdate)
+        ldy #0
+        lda (Temp),y
+        ora #1                  ; set bit 0 to 1.(active object)
+        sta o_info,x
+        iny
+        lda (Temp),y
+        sta o_type,x
+        iny
+        lda (Temp),y
+        sta o_currentAction,x
+        iny
+        lda (Temp),y
+        sta o_velX,x
+        iny
+        lda (Temp),y
+        sta o_velY,x
+        iny
+        lda (Temp),y
+        sta o_actionArrayLo,x
+        iny
+        lda (Temp),y
+        sta o_actionArrayHi,x
+        iny
+        lda (Temp),y
+        sta o_extraInfo,x
+
+
+        ; set sprite color
+        ldy #8
+        lda (Temp),y
+        sta SPR0C,x
+
+        ; copy data into sprite record
+        ;   (setup by WorldUpdate, copied to
+        ;    VIC memory by ScreenUpdate)
+        lda kResetBit,x         ; initially reset X MSB
+        and S_XMSB
+        sta S_XMSB
+        ldy #11                 ; get X MSB
+        lda (Temp),y
+        lsr
+        bcc .out1
+        lda kSetBit,x           ; set sprite's X MSB bit
+        ora S_XMSB
+        sta S_XMSB
+.out1:
+        ; enable the sprite
+        lda kSetBit,x
+        ora S_enable
+        sta S_enable
+
+        ; copy X and Y positions
+        txa                     ; X = X * 2
+        asl
+        tax
+        dey                     ; get X pos
+        lda (Temp),y
+        sta S_XYPos,x
+        dey                     ; get Y pos
+        lda (Temp),y
+        inx
+        sta S_XYPos,x
+
+        ; set return address to instruction after data
+        lda Temp                ; A = (Temp)+12
+        clc
+        adc #12
+        tax                     ; X = A
+        lda Temp+1              ; A = (Temp+1)+C
+        adc #0
+        pha
+        txa
+        pha
+
+        rts
 
 ; ******************* RequestAction *******************
 ;
-; Purpose: 		requests that a character begin a certain action
-;			(for actions, see "Actions," above)
-; Registers used: 	
+; Purpose:              requests that a character begin a certain action
+;                       (for actions, see "Actions," above)
+; Registers used:
 ;
 ; How to use:
-;	Load .X with the object to request (0-7)
-;	Load .A with the desired action (run, stand, attack, jump)
-;	Load .Y with the desired facing (left or right)
-;	Call this routine
+;       Load .X with the object to request (0-7)
+;       Load .A with the desired action (run, stand, attack, jump)
+;       Load .Y with the desired facing (left or right)
+;       Call this routine
 ;
-RequestAction	subroutine
-	sta Temp		; Temp = desired action
-	lda o_currentAction,x	; if action already being done, return
-	sta Temp2		;  temp2 = current action
-	cmp Temp		;
-	bne .newact		;
-	lda o_info,x		; if facing different, update action
-	and #%00000010
-	sta Temp3
-	cpy Temp3
-	beq .exit
-.newact	tya
-	ldy Temp		; action = run?
-	bne .1
-	
-	; run
-	tay			; .Y = desired facing
-	lda Temp2
-	cmp #stand		;   if not standing or running,
-				; 	can't run(go exit)
-	beq .run1		;
-	cmp #run		;
-	bne .exit		;
-.run1	;lda o_info,x
-	;pha			; store current info
-	;and #%11111101
-	;and #%00000010		; check facing
-	;sta Temp3		; Temp3 = current facing
-	;cpy Temp3
-	;bne .face		; can't start run again in same direction!
-	
-	;jmp .exit
-	;pha
-	;lda Temp2
-	;cmp #run
-	;beq .exit
-	;pla
-.face	;pla			; set current facing to desired facing
-	and #%11111101
-	sty Temp3
-	ora Temp3
-	sta o_info,x
-	lda #kRunSpeed		; set velocity
-	cpy #right		;  positive if facing right
-	beq .rt			;
-	lda #(-kRunSpeed)	;  negative if facing left
-.rt	sta o_velX,x		;
-	jmp .setAction
-	
-.1	
-	dey			; action = jump?
-	bne .2
-	
-	; jump
-	lda Temp2
-	cmp #attack
-	beq .exit
-	cmp #jump
-	beq .exit
-	lda #(-8)		; set jump velocity
-	sta o_velY,x
-	jmp .setAction
-	
-.2	dey
-	dey			; action = stand?
-	bne .3
-	
-	; stand
-	lda #0
-	sta o_velX,x
-	jmp .setAction
-	
-.3	dey			; action = attack?
-	bne .exit
-	
-	; attack
+RequestAction   subroutine
+        sta Temp                ; Temp = desired action
+        lda o_currentAction,x   ; if action already being done, return
+        sta Temp2               ;  temp2 = current action
+        cmp Temp                ;
+        bne .newact             ;
+        lda o_info,x            ; if facing different, update action
+        and #%00000010
+        sta Temp3
+        cpy Temp3
+        beq .exit
+.newact tya
+        ldy Temp                ; action = run?
+        bne .1
+
+        ; run
+        tay                     ; .Y = desired facing
+        lda Temp2
+        cmp #stand              ;   if not standing or running,
+                                ;       can't run(go exit)
+        beq .run1               ;
+        cmp #run                ;
+        bne .exit               ;
+.run1   ;lda o_info,x
+        ;pha                    ; store current info
+        ;and #%11111101
+        ;and #%00000010         ; check facing
+        ;sta Temp3              ; Temp3 = current facing
+        ;cpy Temp3
+        ;bne .face              ; can't start run again in same direction!
+
+        ;jmp .exit
+        ;pha
+        ;lda Temp2
+        ;cmp #run
+        ;beq .exit
+        ;pla
+.face   ;pla                    ; set current facing to desired facing
+        and #%11111101
+        sty Temp3
+        ora Temp3
+        sta o_info,x
+        lda #kRunSpeed          ; set velocity
+        cpy #right              ;  positive if facing right
+        beq .rt                 ;
+        lda #(-kRunSpeed)       ;  negative if facing left
+.rt     sta o_velX,x            ;
+        jmp .setAction
+
+.1
+        dey                     ; action = jump?
+        bne .2
+
+        ; jump
+        lda Temp2
+        cmp #attack
+        beq .exit
+        cmp #jump
+        beq .exit
+        lda #(-8)               ; set jump velocity
+        sta o_velY,x
+        jmp .setAction
+
+.2      dey
+        dey                     ; action = stand?
+        bne .3
+
+        ; stand
+        lda #0
+        sta o_velX,x
+        jmp .setAction
+
+.3      dey                     ; action = attack?
+        bne .exit
+
+        ; attack
 
 .setAction:
 ; called if the action has been granted
-	lda o_info,x		; newAction = true
-	ora #%00000100		;
-	sta o_info,x
-	lda Temp
-	tay			; y = theAction
-	sta o_currentAction
-	lda o_actionArrayLo,x
-	sta Temp
-	lda o_actionArrayHi,x
-	sta Temp+1
-	lda (Temp),y		; set sprite data pointer based on action
-	sta S_spriteDataPtr,x
-	
-	
-.exit	rts
-;	0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
-;	5 - die, 6 - beingHit	
-	
+        lda o_info,x            ; newAction = true
+        ora #%00000100          ;
+        sta o_info,x
+        lda Temp
+        tay                     ; y = theAction
+        sta o_currentAction
+        lda o_actionArrayLo,x
+        sta Temp
+        lda o_actionArrayHi,x
+        sta Temp+1
+        lda (Temp),y            ; set sprite data pointer based on action
+        sta S_spriteDataPtr,x
+
+
+.exit   rts
+;       0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
+;       5 - die, 6 - beingHit
+
 ; ******************* DisableSprite *******************
 ;
-; Purpose: 		Disables sprite
+; Purpose:              Disables sprite
 ;
-; Registers used: 	
+; Registers used:
 ;
 ; How to use:
-;	Load .X with the object to disable (0-7)
-;	Call this routine
+;       Load .X with the object to disable (0-7)
+;       Call this routine
 ;
-DisableSprite	subroutine
-	lda kResetBit,x
-	and S_enable
-	sta S_enable
-	rts
-	
-	
-	
+DisableSprite   subroutine
+        lda kResetBit,x
+        and S_enable
+        sta S_enable
+        rts
+

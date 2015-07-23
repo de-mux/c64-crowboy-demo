@@ -7,70 +7,59 @@
 ;
 
 
-; Function Name: 	Wait (modified from Madagascar source)
+; Function Name:        Wait (modified from Madagascar source)
 ;
-; Purpose: 		Pause program execution
+; Purpose:              Pause program execution
 ;
-; Registers used: 	none
-;
-; Memory used:		$0337
+; Registers used:       rA, rX, rY
 ;
 ; How to use:
-;	Load $0337 with desired wait time.
-;	Note: Not reccomended to be used inside an IRQ interrupt.
-;	
-Wait	subroutine
-	pha
-	txa
-	pha
-	tya
-	pha
-	ldx $0337
-.l00	lda #12
-.l0	pha
-	ldy #199
-.l1	dey
-	bne .l1
-	pla
-	tay
-	dey
-	tya
-	bne .l0
-	dex
-	bne .l00
-	pla
-	tay
-	pla
-	tax
-	pla
-	rts
-	
-; Function Name: 	ReadJoy (from C64 Programmers Ref Guide p.345 ©1982 CBM)
+;       Load rA with desired wait time.
+;       Note: Not recommended to be used inside an IRQ interrupt.
 ;
-; Purpose: 		read joyshtick 2
+Wait    subroutine
+        ;tax
+.l00    lda #12
+.l0     pha
+        ldy #199
+.l1     dey
+        bne .l1
+        pla
+        tay
+        dey
+        tya
+        bne .l0
+        dex
+        bne .l00
+        rts
+
+; Function Name:        ReadJoy (from C64 Programmers Ref Guide p.345 ©1982 CBM)
 ;
-; Registers used: 	.A, .X, .Y
+; Purpose:              read joyshtick 2
+;
+; Registers used:       .A, .X, .Y
 ;
 ; How to use:
-;	Call this routine.
-;	.X and .Y contain X and Y directions (1, 0, or -1)
-;	If carry is clear, then fire button
-;	
-ReadJoy	subroutine
-	LDA JOY2
-	LDY #0
-	LDX #0
-	LSR
-	BCS .R0
-	DEY
-.R0	LSR
-	BCS .R1
-	INY
-.R1	LSR
-	BCS .R2
-	DEX
-.R2	LSR
-	BCS .R3
-	INX
-.R3	LSR
-	RTS
+;       Call this routine.
+;       .X and .Y contain X and Y directions (1, 0, or -1)
+;       If carry is clear, then fire button
+;
+ReadJoy subroutine
+        LDA JOY2
+        LDY #0
+        LDX #0
+        LSR
+        BCS .R0
+        DEY
+.R0     LSR
+        BCS .R1
+        INY
+.R1     LSR
+        BCS .R2
+        DEX
+.R2     LSR
+        BCS .R3
+        INX
+.R3     LSR
+        RTS
+
