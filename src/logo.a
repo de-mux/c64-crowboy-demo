@@ -12,48 +12,48 @@ LOGO_SCREEN_DRAW_X = 16
 LOGO_SCREEN_DRAW_Y = 8
 LOGO_SCREEN_DRAW_ORIGIN = LOGO_VIC_BANK + LOGO_SCREEN_BANK_START + (40*LOGO_SCREEN_DRAW_Y + LOGO_SCREEN_DRAW_X)  ; row 8, col 16
 
-LOGO_SPR_POINTERS = LOGO_VIC_BANK + LOGO_SCREEN_BANK_START + $3F8
+LOGO_SPR_POINTERS = LOGO_VIC_BANK + LOGO_SCREEN_BANK_START + SPR_PTR_OFFSET
         ;ECHO LOGO_SPR_POINTERS
 
 C64LOGO subroutine
         ;copy sprite data to bank 64-
         LDA #<.SPR
         LDY #>.SPR
-        STA Temp
-        STY Temp+1
+        STA temp_w
+        STY temp_w+1
         LDA #<LOGO_SPRITE_MEM_START
         LDY #>LOGO_SPRITE_MEM_START
-        STA Temp2
-        STY Temp2+1
+        STA temp_w2
+        STY temp_w2+1
         LDY #0
-.LOOP1  LDA (Temp),Y    ;get byte
+.LOOP1  LDA (temp_w),Y          ;get byte
         CMP #$F2                ;exit if done
         BEQ .ROUT0
         CMP #$F1                ;if row of zeroes, expand
         BNE .NZ
-        INC Temp
+        INC temp_w
         BNE .L1
-        INC Temp+1
-.L1     LDA (Temp),Y            ;expand zeroes
+        INC temp_w+1
+.L1     LDA (temp_w),Y          ;expand zeroes
         TAX
         LDA #0
-.LOOP2  STA (Temp2),Y
+.LOOP2  STA (temp_w2),Y
         DEX
         BEQ .L2
-        INC Temp2
+        INC temp_w2
         BNE .LOOP2
-        INC Temp2+1
+        INC temp_w2+1
         JMP .LOOP2
-.NZ     STA (Temp2),Y           ;not a row of zeroes, copy normally
-.L2     INC Temp2
+.NZ     STA (temp_w2),Y         ;not a row of zeroes, copy normally
+.L2     INC temp_w2
         BNE .EX
-        INC Temp2+1
-.EX     INC Temp
+        INC temp_w2+1
+.EX     INC temp_w
         BNE .LOOP1
-        INC Temp+1
+        INC temp_w+1
         JMP .LOOP1
 
-;COPY C64 LOGO CHAR DATA, turn it upside down
+        ;COPY C64 LOGO CHAR DATA, turn it upside down
 .ROUT0  LDX #$90        ;copy logo char data
 .C2     DEX
         BEQ .ROUT0B
@@ -64,64 +64,63 @@ C64LOGO subroutine
 .ROUT0B LDA #$90
         ;LDY #$3A
         LDY #>LOGO_CHARSET_MEM_DEST
-        STA Temp
-        STY Temp+1
+        STA temp_w
+        STY temp_w+1
         LDX #0          ;turn it upside down for chars 82-99?
         LDY #7
 ;.C3    LDA $3A00,X
 .C3     LDA LOGO_CHARSET_MEM_DEST,X
-        STA (Temp),Y
+        STA (temp_w),Y
         INX
         CPX #$8F
         BEQ .SCN
         DEY
         BPL .C3
         LDY #7
-        LDA Temp
+        LDA temp_w
         CLC
         ADC #8
         BCC .C4
-        INC Temp+1
-.C4     STA Temp
+        INC temp_w+1
+.C4     STA temp_w
         JMP .C3
 
-;DRAW THE LOGO
 .SCN    LDX #$20        ;pause
         JSR Wait
 
+        ;DRAW THE COMMODORE LOGO
         LDA #<LOGO_SCREEN_DRAW_ORIGIN
         LDY #>LOGO_SCREEN_DRAW_ORIGIN
-        STA Temp
-        STY Temp+1
+        STA temp_w
+        STY temp_w+1
         LDY #$D9        ;color memory
-        STA Temp2
-        STY Temp2+1
+        STA temp_w2
+        STY temp_w2+1
         LDX #0
         LDY #0
 .LOOP3  LDA .LOGOMP,X   ;store
         BEQ .ROUT1
-        STA (Temp),Y
+        STA (temp_w),Y
         LDA #6
-        STA (Temp2),Y
+        STA (temp_w2),Y
         INX
         INY
         CPY #8
         BNE .LOOP3
         LDY #0
         CLC             ;next screen row
-        LDA Temp
+        LDA temp_w
         ADC #$28
         BCC .C1
-        INC Temp+1
-.C1     STA Temp
+        INC temp_w+1
+.C1     STA temp_w
         CLC
-        LDA Temp2
+        LDA temp_w2
         ADC #$28
         BCC .C0
-        INC Temp2+1
-.C0     STA Temp2
+        INC temp_w2+1
+.C0     STA temp_w2
         JMP .LOOP3
-
 .ROUT1  LDA #9  ;set part of logo to brown
         JSR .RED
         LDX #5
@@ -146,15 +145,18 @@ C64LOGO subroutine
         LDA .SPRC,X
         STA SPR0C,X
         JMP .L5
-.ROUT4  LDX #$55        ;pause
+
+.ROUT4  LDX #$45        ;pause
         JSR Wait
+
+        ; ANIMATE LENS FLARE
         LDA #%00001101  ;turn some sprites on
         STA SPRDISP
         LDY #4
 .ANIM   tya
         pha
         LDX #5
-        JSR Wait        ;***Animate Logo***
+        JSR Wait
         pla
         tay
         LDX #5
@@ -184,20 +186,21 @@ C64LOGO subroutine
         LDX #$60        ;pause
         JSR Wait
 
-        LDA #9          ;***Fade out***
+        ; FADE OUT
+        LDA #9
         JSR .RED
         LDY #2
         LDX #0
-        STX Temp2
-.F0     STX Temp
-.F1     LDX Temp
+        STX temp_w2
+.F0     STX temp_w
+.F1     LDX temp_w
         LDA .FDAT,X
-        INC Temp
-        INC Temp
-        LDX Temp2
+        INC temp_w
+        INC temp_w
+        LDX temp_w2
         STA SPR0C,X
-        INC Temp2
-        LDA Temp2
+        INC temp_w2
+        LDA temp_w2
         CMP #8
         BNE .F1
         tya     ; remember Y
@@ -212,11 +215,11 @@ C64LOGO subroutine
         BNE .F2
         tya
         pha
-        jsr ClearScreen
+        jsr ClearCurrentScreen
         pla
         tay
 .F2     LDX #0
-        STX Temp2
+        STX temp_w2
         LDX #1
         JMP .F0
 .RET    LDA #0
@@ -234,7 +237,7 @@ C64LOGO subroutine
         .BYTE $00, $00
 
 .RED    LDX #3          ;used for fading out the logo
-.CR0    STA $D9F4,X
+.CR0    STA COLORMEM+$1F4,X
         DEX
         BNE .CR1
         LDX #43

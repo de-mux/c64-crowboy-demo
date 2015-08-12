@@ -11,8 +11,8 @@
 ; This array describes the next sprite in sequence for a given sprite, starting
 ;	at sprite 83($53 HEX).
 ; The bytes that are paired mean the object is flippable. Facing right comes
-;	first, facing left comes second. Only the first bytes of these pairs
-;	are looked up by the program. The second byte in this array is never
+;	first, facing left comes second. Only the first byte of each pair
+;	is looked up by the program. The second byte in this array is never
 ;	looked up by the program, but is a placeholder so sprites may be looked
 ;	up more quickly. When the program updates the VIC's sprite data
 ;	pointers, it checks which way the sprites are "facing", and adds 1 to

@@ -14,7 +14,7 @@
 ; Registers used:       rA, rX, rY
 ;
 ; How to use:
-;       Load rA with desired wait time.
+;       Load rX with desired wait time.
 ;       Note: Not recommended to be used inside an IRQ interrupt.
 ;
 Wait    subroutine

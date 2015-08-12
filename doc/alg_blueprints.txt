@@ -217,3 +217,151 @@ void UpdateObjects()
 	
 };
 	
+**************************************************************
+Screen fade
+IRQEnter
+  Int_WorldScreenUpdate  \ toggle
+  Int_ModeJump      /
+
+  Int_MainMenu
+
+
+During game:
+  
+
+For menu, use fullscreen
+For game, fade just the viewport
+
+Fade out:
+  Fade each towards black:
+    color mem
+    border
+    background
+    multicolors
+    sprite colors
+
+Fade in:
+  Setup:
+    start with all colors black
+    copy chars to current screen
+  Fade from color mem values towards offscreen color values
+
+**********************************
+Order of operation
+- fade screen out
+- set screen mem to screen 1, charset to chrset 2
+- show C64 logo
+- init text
+- set mode to ExitToMainMenu
+- InitIRQ
+
+- irq: IRQEnter (mode ExitToMainMenu)
+  - sets interrupt to Int_MainMenu and compare
+- irq: Int_MainMenu (menu_mode DrawMenu)
+  - set menu_mode to MenuLoop
+- irq: Int_MainMenu (menu_mode MenuLoop)
+  - set mode to NewGame
+  - set_interrupt Int_ModeJump
+> FADE OUT
+- irq: Int_ModeJump(mode NewGame)
+    - InitGameGraphics
+    - set_level 1
+    - set_mode SetupLevel
+- irq: Int_ModeJump (mode SetupLevel)
+  - SetupPlayer
+  - set_mode WorldUpdate
+- irq: Int_ModeJump (mode WorldUpdate)
+  - update characters/scroll
+  - DrawLevelToOffscreen
+  - RequestWorldScreenUpdate
+< FADE IN
+- irq: Int_WorldScreenUpdate
+  - copy everything to screen
+  - set interrupt back to Int_ModeJump
+
+To add:
+  Int_WorldScreenUpdate - check fade mode, act appropriately
+Frame 0: do world update
+Frame 1: draw world
+
+Fade out:
+Init:
+  - copy color RAM, sprite/bg colors into offscreen color area
+Loop:
+  - copy offscreen color to color RAM, copy sprite/bg colors
+  - fade out 1 shade on offscreen color area
+
+Fade in:
+Init:
+  - start with all offscreen colors black
+  - copy desired chars onto screen
+Loop:
+  - copy offscreen color to color RAM
+  - fade in 1 shade to offscreen color area
+
+
+FADE ROUTINE(method 0)
+; use offscreen char area to store target colors
+; COLOR_FADE_TABLE: 16 values set up depending on the current fade_table_index(prior to loop)
+  ldy offscreen_char,x
+  lda COLOR_FADE_TABLE,y
+  tay
+  sta offscreen_color,x
+
+
+FADE ROUTINE(method 1)
+; COLOR_FADE_TABLE: rows=target color, columns=fade colors
+;                       values: high nibble = color target, low nibble = cur value
+; offscreen_color: high nibble = color target, low nibble = current value
+  clc
+
+  lda offscreen_color,x         ; 4-5
+  and #$F0                      ; 2
+  lsr                           ; 2  put in multiples of 8 for index into color table
+  adc fade_table_index                ; 3  (0-7)
+  tay                           ; 2
+  lda COLOR_FADE_TABLE,y        ; 4-5
+  sta offscreen_color,x         ; 4-5
+
+
+FADE ROUTINE(method 2)
+; COLOR_FADE_TABLE: 16 values set up depending on the current fade_table_index(prior to loop)
+;                       values: high nibble = color target, low nibble = cur value
+; offscreen_color: high nibble = color target, low nibble = current value
+  clc
+
+  lda offscreen_color,x         ; 4-5
+  lsr                           ; 2  put in multiples of 8 for index into color table
+  lsr                           ; 2
+  lsr                           ; 2
+  lsr                           ; 2
+  tay                           ; 2
+  lda COLOR_FADE_TABLE,y        ; 4-5
+  sta offscreen_color,x         ; 4-5
+
+FADE ROUTINE(method 3)
+; COLOR_FADE_TABLE: rows=fade index(0-7), columns=current color value per target color
+; offscreen_color: high nibble = color target, low nibble = current value
+  clc
+  ldx fade_table_index                ; fade_table_index is a multiple of 16 for each row
+                                ;  of COLOR_FADE_TABLE
+
+  lda offscreen_color,x
+  and #$F0
+  sta color_nibble              ; zp
+  lsr                           ; put in multiples of 8 for index into color table
+  lsr
+  lsr
+  lsr
+  adc fade_table_index                ; (0-7)
+  tay
+  lda COLOR_FADE_TABLE,y
+  ora color_nibble
+  sta offscreen_color,x
+
+
+
+aaaacccc
+37
+
+

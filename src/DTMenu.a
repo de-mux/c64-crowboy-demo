@@ -7,35 +7,58 @@
 ;
 ;
 
-LoopMenu        EQU 1
-DrawMenu        EQU 0
+;MENU_MODE_ENTER       EQU 0
+MENU_MODE_LOOP        EQU 0
+MENU_MODE_FADE_OUT    EQU 1
+MENU_MODE_FADE_IN     EQU 2
 
 SelectionArrow = 45     ; char # of selection arrow
 
 
+DoExitToMainMenu        subroutine
+        jsr _SetMenuModeFadeIn
 
-MainMenu        subroutine
+        set_interrupt #Int_MainMenu ; set interrupt to code at Int_MainMenu
+        lda #IRQ_MAIN_MENU_COMPARE  ; set raster compare line
+        sta RASTER_COMPARE
+
+        rts
+
+; Interrupt routine for main menu
+Int_MainMenu        subroutine
         lda #>(IRQExit-1)       ; setup RTS to jump to IRQExit
         pha
         lda #<(IRQExit-1)
         pha
 
-        ldx MenuMode            ; what's the menu mode?
-        beq .DoDrawMenu         ;  draw menu
+        ldx menu_mode            ; what's the menu mode?
+        ;beq ._DoDrawMenu         ;  draw menu
+        ;dex
+        beq ._DoMenuLoop         ;  menu loop
         dex
-        beq .DoLoopMenu         ;  menu loop
+        beq ._DoMenuFadeOut
+        dex
+        beq ._DoMenuFadeIn
         rts
+;._DoDrawMenu    jmp _DoDrawMenu
+._DoMenuLoop    jmp _DoMenuLoop
+._DoMenuFadeOut jmp _DoMenuFadeOut
+._DoMenuFadeIn  jmp _DoMenuFadeIn
 
-.DoDrawMenu     jmp DoDrawMenu
-.DoLoopMenu     jmp DoLoopMenu
+_DoDrawMenu      subroutine
+        ; draw everything to offscreen first
 
+        jsr ClearOffscreen
 
+        ; black out all color registers
+        lda #COLOR_BLACK
+        ldx #[VIC_II_COLOR_REGISTERS_END - VIC_II_COLOR_REGISTERS]
+.1      sta offscreen_vic_ii_color_registers,x
+        dex
+        bpl .1
 
-DoDrawMenu      subroutine
-        jsr ClearScreen
-
-        lda #red
-        sta BG0_COLOR
+        lda #COLOR_RED
+        sta offscreen_color_bg0
 
         ;lda #blue              ; text = blue
         ;jsr SetCursorColor
@@ -45,8 +68,8 @@ DoDrawMenu      subroutine
 
         ldx #9          ; draw "Ping"
         ldy #17
-        jsr SMPlot
-        lda #white
+        jsr SetCursorPosOffscreen
+        lda #COLOR_WHITE
         jsr SetCursorColor
         lda #100
         ldx #6
@@ -55,29 +78,29 @@ DoDrawMenu      subroutine
 
         ldx #23         ; "Copyright 2002"
         ldy #8
-        jsr SMPlot
+        jsr SetCursorPosOffscreen
         lda #<copyright_string
         ldy #>copyright_string
         jsr Print
 
         ldx #18         ; "Start Game"
         ldy #14
-        jsr SMPlot
+        jsr SetCursorPosOffscreen
         lda #<.sg
         ldy #>.sg
         jsr Print
 
         ldx #20         ; "Options"
         ldy #14
-        jsr SMPlot
+        jsr SetCursorPosOffscreen
         lda #<.op
         ldy #>.op
         jsr Print
 
         ldx #1          ; Draw Ping's face
         ldy #10
-        jsr SMPlot
-        lda #yellow
+        jsr SetCursorPosOffscreen
+        lda #COLOR_YELLOW
         jsr SetCursorColor
         lda #<.ping
         ldx #>.ping
@@ -86,20 +109,24 @@ DoDrawMenu      subroutine
 
         ldx #15         ; "Crow Boy"
         ldy #16
-        jsr SMPlot
+        jsr SetCursorPosOffscreen
         lda #<.cbs
         ldy #>.cbs
         jsr Print
 
-        ldx #$05        ; short pause
-        jsr Wait
+        ;jsr PageFlip
+        ;ldx #_SCREEN_COPY_FULLSCREEN
+        ;jsr CopyOffscreenColorToColorMem
+
+        ;ldx #$05        ; short pause
+        ;jsr Wait
 
         lda #2          ; Setup Menu with 2 items,
         ldx #18         ;  starting at row 16, column 15
         ldy #12
-        jsr SetupMenu
+        jsr _SetupMenu
 
-        inc MenuMode    ; set mode to LoopMenu
+        ;inc menu_mode    ; set mode to MENU_MODE_LOOP
         rts             ; goto IRQExit
 .menu   DC "OH, WHAT A MEAL!",0
 .cbs    DC "CROW BOY",0
@@ -109,22 +136,7 @@ DoDrawMenu      subroutine
         DC 0
 
 
-DoLoopMenu      subroutine
-        jsr MenuSelect
-        dex
-        bmi .1          ; X was 0(no selection)
-        bne .2          ; X was 1
-        lda #NewGame    ;   set mode to do new game
-        jsr SetMode
-        sei
-        set_interrupt #ModeJump
-        cli
-        rts
-.2      nop             ; X was 2
-.1      rts             ; goto IRQExit
-
-
-; Function Name:        SetupMenu (MenuSelect modified from School RPG source)
+; Function Name:        _SetupMenu
 ;
 ; Purpose:              Select from a menu using joystick
 ;
@@ -133,22 +145,23 @@ DoLoopMenu      subroutine
 ; How to use:
 ;       Load .X/.Y with row/column to left of first menu item
 ;       Load .A with # of menu items
-;       Call SetupMenu.
-;       Call MenuSelect on every IRQ.
+;       Call _SetupMenu.
+;       Call _MenuSelect on every IRQ.
 ;       Item selected will be returned in .X
 ;               if item hasn't been selected yet, .X = 0
 ;
-SetupMenu       subroutine
+_SetupMenu       subroutine
         STA .ITEMS
         LDA #1          ;current menu item
         STA .SEL
         STY .column     ; store row/column
         STX .row
-        JSR SMPlot      ; set cursor to desired position
+        JSR SetCursorPosOffscreen      ; set cursor to desired position
         RTS
-MenuSelect:
-.ARROW  ldx #5
-        JSR Wait        ;little delay for selection
+
+_MenuSelect:
+.ARROW:  ;ldx #5
+        ;JSR Wait        ;little delay for selection
 .R1     JSR ReadJoy     ;read joystick
         BCC .END2
         CPY #0
@@ -172,9 +185,9 @@ MenuSelect:
 .MOVE   CLC
         ldx .row
         ldy .column
-        JSR SMPlot
+        JSR SetCursorPos
         LDA #SelectionArrow  ; show selection arrow
-        JSR SMChrout
+        JSR PrintChar
         ;JMP .ARROW
         ldx #0          ; user hasn't selected an item yet
         rts
@@ -182,17 +195,102 @@ MenuSelect:
         RTS
 ;.ERASE LDX #4
 ;.R2    LDA .ER-1,X
-;       JSR SMChrout
+;       JSR PrintChar
 ;       DEX
 ;       BNE .R2
 .ERASE  jsr BackSpace
-        lda #SpaceBar
-        jsr SMChrout
+        lda #SPACE_BAR
+        jsr PrintChar
 .R3     SEC             ;get row/column
-        JSR SMPlot
+        JSR SetCursorPos
         RTS
 
 .ITEMS  DC 0
 .SEL    DC 0
 .row    DC 0
 .column DC 0
+
+
+; Function Name:        _DoMenuLoop
+;
+; Purpose:              Do the main menu loop
+;
+; Registers used:       .A, .X, .Y
+;
+_DoMenuLoop      subroutine
+        jsr _MenuSelect
+        dex
+        bmi .1          ; X was 0(no selection)
+        bne .2
+        ; selection 1: new game
+        ; setup stuff to do fadeout
+        jsr _SetMenuModeFadeOut
+        rts
+.2      nop             ; X was 2
+.1      rts             ; goto IRQExit
+
+_SetMenuModeFadeIn      subroutine
+        lda #MENU_MODE_FADE_IN
+        sta menu_mode
+        jsr _DoDrawMenu
+        lda #FADE_MODE_IN
+        jsr FadeStart
+        rts
+
+_SetMenuModeFadeOut
+        lda #MENU_MODE_FADE_OUT
+        sta menu_mode
+        lda #FADE_MODE_OUT
+        jsr FadeStart
+        rts
+
+
+; Function Name:        _DoMenuFadeIn
+;
+; Purpose:              Fade in and then set next mode
+;
+; Registers used:       .A, .X, .Y
+;
+_DoMenuFadeIn  subroutine
+; Function Name:        _DoMenuFadeIn
+;
+; Purpose:              Fade in and then set next mode
+;
+        ; update the screen with current fade values
+        ldx #_SCREEN_COPY_FULLSCREEN
+        jsr CopyOffscreenColorToColorMem
+
+        jsr FadeOffscreenIn
+        cmp #0
+        ; jump to menu mode if fade is finished
+        beq .1
+        rts
+
+.1      lda #MENU_MODE_LOOP
+        sta menu_mode
+        ;ldx #_SCREEN_COPY_FULLSCREEN
+        ;jsr CopyOffscreenColorToColorMem
+        rts
+
+_DoMenuFadeOut  subroutine
+        ; update the screen with current fade values
+        ldx #_SCREEN_COPY_FULLSCREEN
+        jsr CopyOffscreenColorToColorMem
+
+        jsr FadeOffscreenOut
+        ; jump to new game if fade is finished
+        cmp #0
+        beq .1
+        rts
+
+.1:
+        lda #NewGame    ;   set mode to do new game
+        jsr SetMode
+        set_interrupt #Int_ModeJump
+
+        ; for testing purposes
+        ;ldx #$40
+        ;jsr Wait
+        ;jsr _SetMenuModeFadeIn
+        rts
+

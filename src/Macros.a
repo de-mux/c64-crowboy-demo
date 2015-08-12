@@ -119,7 +119,7 @@
 ; GAME ______________________________________
 	MAC set_mode	;set_mode [byte mode]
 	lda #{1}
-	sta Mode
+	sta mode
 	ENDM
 	
 	MAC set_level	;set_level [byte level]
@@ -141,9 +141,9 @@
 	
 	MAC set_interrupt_buf
 	lda <{1}
-	sta VProgramLoopInterrupt
+	sta v_program_loop_interrupt
 	lda >{1}
-	sta VProgramLoopInterrupt+1
+	sta v_program_loop_interrupt+1
 	ENDM
 	
 	MAC _print

@@ -44,9 +44,8 @@ Memory Map:REVISION 2
 R $0002-$00FF	$  FE     254	  RESERVED for variables/ptrs
 R $0100-$01FF	$ 100	    256	  RESERVED for 6502 stack
 R $0314-$0315	$   2	      2	  Vector:IRQ routine
-R $0337		    $   1	      1	  Wait routine pause value
-R $0400-$06CF $ 2D0     720   Offscreen char color map(was $A400)
-R $06D0-$080F $ 140     320   ~UNUSED~
+R $0400-$07FF $ 400    1024   Offscreen char color map(was $A400)
+R $0800-$080F $  10      16   ~UNUSED~
   $0810-$0FFF	$ 7F0   2,032 	Boot Code
 
   $1000-$1185	$ 186     390 	Char Color table for charsets(195 x2)(was $4000)

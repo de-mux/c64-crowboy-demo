@@ -105,15 +105,14 @@ SetupPlayer     subroutine
         ldx #0
         lda o_actionArrayLo,x
         ldy o_actionArrayHi,x
-        sta Temp
-        sty Temp+1
+        sta temp_w
+        sty temp_w+1
         lda o_currentAction,x
         tay
-        lda (Temp),y            ; check sprite's image
+        lda (temp_w),y            ; check sprite's image
         ldy #0                  ; set sprite data ptr accordingly
         sta S_spriteDataPtr,y
         rts
-
 
 
 ; ******************* GenerateObject *******************
@@ -132,60 +131,60 @@ SetupPlayer     subroutine
 ; FIXME: create constants for all the indexes into an object record
 GenerateObject  subroutine
         pla                     ; get return address(points to data following
-        sta Temp                ;   the JSR)
+        sta temp_w                ;   the JSR)
         pla
-        sta Temp+1
-        inc Temp                ; add 1 to pointer
+        sta temp_w+1
+        inc temp_w                ; add 1 to pointer
         bne .add
-        inc Temp+1
+        inc temp_w+1
 .add:
 
         ldy #12                 ; what is object's index?(0-7)
-        lda (Temp),y
+        lda (temp_w),y
         tax                     ; store in x for later
 
         ; copy data into object record
         ;   (used by WorldUpdate)
         ldy #0
-        lda (Temp),y
+        lda (temp_w),y
         ora #1                  ; set bit 0 to 1.(active object)
         sta o_info,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_type,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_currentAction,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_velX,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_velY,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_actionArrayLo,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_actionArrayHi,x
         iny
-        lda (Temp),y
+        lda (temp_w),y
         sta o_extraInfo,x
 
 
         ; set sprite color
         ldy #8
-        lda (Temp),y
+        lda (temp_w),y
         sta SPR0C,x
 
         ; copy data into sprite record
         ;   (setup by WorldUpdate, copied to
-        ;    VIC memory by ScreenUpdate)
+        ;    VIC memory by Int_WorldScreenUpdate)
         lda kResetBit,x         ; initially reset X MSB
         and S_XMSB
         sta S_XMSB
         ldy #11                 ; get X MSB
-        lda (Temp),y
+        lda (temp_w),y
         lsr
         bcc .out1
         lda kSetBit,x           ; set sprite's X MSB bit
@@ -202,19 +201,19 @@ GenerateObject  subroutine
         asl
         tax
         dey                     ; get X pos
-        lda (Temp),y
+        lda (temp_w),y
         sta S_XYPos,x
         dey                     ; get Y pos
-        lda (Temp),y
+        lda (temp_w),y
         inx
         sta S_XYPos,x
 
         ; set return address to instruction after data
-        lda Temp                ; A = (Temp)+12
+        lda temp_w                ; A = (temp_w)+12
         clc
         adc #12
         tax                     ; X = A
-        lda Temp+1              ; A = (Temp+1)+C
+        lda temp_w+1              ; A = (temp_w+1)+C
         adc #0
         pha
         txa
@@ -235,23 +234,23 @@ GenerateObject  subroutine
 ;       Call this routine
 ;
 RequestAction   subroutine
-        sta Temp                ; Temp = desired action
+        sta temp_w                ; temp_w = desired action
         lda o_currentAction,x   ; if action already being done, return
-        sta Temp2               ;  temp2 = current action
-        cmp Temp                ;
+        sta temp_w2               ;  temp2 = current action
+        cmp temp_w                ;
         bne .newact             ;
         lda o_info,x            ; if facing different, update action
         and #%00000010
-        sta Temp3
-        cpy Temp3
+        sta temp_w3
+        cpy temp_w3
         beq .exit
 .newact tya
-        ldy Temp                ; action = run?
+        ldy temp_w                ; action = run?
         bne .1
 
         ; run
         tay                     ; .Y = desired facing
-        lda Temp2
+        lda temp_w2
         cmp #stand              ;   if not standing or running,
                                 ;       can't run(go exit)
         beq .run1               ;
@@ -261,20 +260,20 @@ RequestAction   subroutine
         ;pha                    ; store current info
         ;and #%11111101
         ;and #%00000010         ; check facing
-        ;sta Temp3              ; Temp3 = current facing
-        ;cpy Temp3
+        ;sta temp_w3              ; temp_w3 = current facing
+        ;cpy temp_w3
         ;bne .face              ; can't start run again in same direction!
 
         ;jmp .exit
         ;pha
-        ;lda Temp2
+        ;lda temp_w2
         ;cmp #run
         ;beq .exit
         ;pla
 .face   ;pla                    ; set current facing to desired facing
         and #%11111101
-        sty Temp3
-        ora Temp3
+        sty temp_w3
+        ora temp_w3
         sta o_info,x
         lda #kRunSpeed          ; set velocity
         cpy #right              ;  positive if facing right
@@ -288,7 +287,7 @@ RequestAction   subroutine
         bne .2
 
         ; jump
-        lda Temp2
+        lda temp_w2
         cmp #attack
         beq .exit
         cmp #jump
@@ -316,14 +315,14 @@ RequestAction   subroutine
         lda o_info,x            ; newAction = true
         ora #%00000100          ;
         sta o_info,x
-        lda Temp
+        lda temp_w
         tay                     ; y = theAction
         sta o_currentAction
         lda o_actionArrayLo,x
-        sta Temp
+        sta temp_w
         lda o_actionArrayHi,x
-        sta Temp+1
-        lda (Temp),y            ; set sprite data pointer based on action
+        sta temp_w+1
+        lda (temp_w),y            ; set sprite data pointer based on action
         sta S_spriteDataPtr,x
 
 

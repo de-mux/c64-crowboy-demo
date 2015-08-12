@@ -1,8 +1,43 @@
 ;   System declarations (no code in this file)
 ; ===================================================================
 
+; 6502/6510 definitions
+;
+CPU_PAGE_SIZE = 256
 ; Processor memory locations
-PROCESSOR_PORT = $1
+CPU_PROCESSOR_PORT = $1
+; Stack
+CPU_STACK = $0100
+; Hardware interrupt vectors
+HW_VECT  = $FFFA
+VECT_NMI = $FFFA
+VECT_RES = $FFFC
+VECT_IRQ = $FFFE
+
+; C64 specific definitions
+;
+; Screen/display/graphics
+SCREEN_WIDTH = 40
+SCREEN_HEIGHT = 25
+SCREEN_MEMORY_SIZE = 1024  ; must be aligned to a page
+
+; Colors
+COLOR_BLACK     = 0
+COLOR_WHITE     = 1
+COLOR_RED       = 2
+COLOR_CYAN      = 3
+COLOR_PURPLE    = 4
+COLOR_GREEN     = 5
+COLOR_BLUE      = 6
+COLOR_YELLOW    = 7
+COLOR_ORANGE    = 8
+COLOR_BROWN     = 9
+COLOR_LT_RED    = 10
+COLOR_GREY1     = 11
+COLOR_GREY2     = 12
+COLOR_LT_GREEN  = 13
+COLOR_LT_BLUE   = 14
+COLOR_GREY3     = 15
 
 ; software interrupt vector(2 byte mem location), used by IRQ routine
 SOFT_INTERRUPT_VECT = $0314
@@ -19,8 +54,7 @@ CIA2       = $DD00
 KERNALROM  = $E000
 
 ; Sprites
-SPRDATA_OFFSET = $03F8
-SPRDATA    = $07F8  ;sprite data pointers
+SPR_PTR_OFFSET = $03F8  ; offset to sprite pointers(relative to screen memory)
 SPR0X      = $D000  ;sprite 0-7 x and y positions
 SPR0Y      = $D001
 SPR1X      = $D002
@@ -40,7 +74,7 @@ SPR7Y      = $D00F
 SPRMSB     = $D010  ;sprites 0-7 msb of x position
 VIC1       = $D011  ;VIC control register (raster, extended color text, bmap mode, blank screen,
                     ;  24/25 row text, smooth scroll Y pos)
-IRQ        = $D012  ;read/Write IRQ
+RASTER_COMPARE        = $D012  ;read/Write IRQ
 LPX        = $D013  ;light-Pen X Pos
 LPY        = $D014  ;light-Pen Y Pos
 SPRDISP    = $D015  ;sprites 0-7 display enable (1=enable)
@@ -54,25 +88,32 @@ SPRMC      = $D01C  ;sprites 0-7 multi-color
 SPRH       = $D01D  ;sprites 0-7 expand horizontal
 SSCOL      = $D01E  ;sprite to sprite collision
 SBCOL      = $D01F  ;sprite to background collision
-BORDER_COLOR = $D020
-BG0_COLOR  = $D021
-BG1_COLOR  = $D022
-BG2_COLOR  = $D023
-BG3_COLOR  = $D024
-SPR_MC0    = $D025  ;sprite multi-color 0
-SPR_MC1    = $D026  ;sprite multi-color 1
-SPR_COLORS = $D027
-SPR0C      = $D027  ;sprite 0-7 colors
-SPR1C      = $D028
-SPR2C      = $D029
-SPR3C      = $D02A
-SPR4C      = $D02B
-SPR5C      = $D02C
-SPR6C      = $D02D
-SPR7C      = $D02E
+
+VIC_II_COLOR_REGISTERS = $D020
+BORDER_COLOR = VIC_II_COLOR_REGISTERS + $0
+BG0_COLOR    = VIC_II_COLOR_REGISTERS + $1
+BG1_COLOR    = VIC_II_COLOR_REGISTERS + $2
+BG2_COLOR    = VIC_II_COLOR_REGISTERS + $3
+BG3_COLOR    = VIC_II_COLOR_REGISTERS + $4
+SPR_MC0      = VIC_II_COLOR_REGISTERS + $5 ;sprite multi-color 0
+SPR_MC1      = VIC_II_COLOR_REGISTERS + $6 ;sprite multi-color 1
+;sprite 0-7 colors
+SPR_COLORS   = VIC_II_COLOR_REGISTERS + $7
+SPR0C        = SPR_COLORS + $0
+SPR1C        = SPR_COLORS + $1
+SPR2C        = SPR_COLORS + $2
+SPR3C        = SPR_COLORS + $3
+SPR4C        = SPR_COLORS + $4
+SPR5C        = SPR_COLORS + $5
+SPR6C        = SPR_COLORS + $6
+SPR7C        = SPR_COLORS + $7
+VIC_II_COLOR_REGISTERS_END = SPR7C
 
 JOY1       = $DC01
 JOY2       = $DC00
+
+CIA1_INT_CTRL = $DC0D
+CIA2_INT_CTRL = $DD0D
 
 
 ; KERNAL routines
@@ -99,6 +140,7 @@ RAMTAS  = $FF87
 RDTIM   = $FFDE
 READST  = $FFB7
 RESTOR  = $FF8A
+VECTOR  = $FF8D
 SAVE    = $FFD8
 SCNKEY  = $FF9F
 SCREEN  = $FFED
@@ -114,4 +156,4 @@ TKSA    = $FF96
 UDTIM   = $FFEA
 UNLSN   = $FFAE
 UNTLK   = $FFAB
-VECTOR  = $FF8D
+

@@ -1,0 +1,21 @@
+; "Downtown"
+;(c) 2002 by Eric Odland
+;
+; File : DTConstants.a
+;
+; Contains : global constants needed for the game. No code here.
+
+; LEVEL INFO
+LEVEL_PACKED_WIDTH = 128
+LEVEL_PACKED_HEIGHT = 9
+LEVEL_BLOCK_SIZE = 2    ; 2x2 character blocks
+LEVEL_PACKED_TOTAL_SIZE = LEVEL_PACKED_WIDTH * LEVEL_PACKED_HEIGHT
+
+; IRQ/TIMING
+;IRQ Screen Update Compare
+IRQ_SCREEN_UPDATE_COMPARE   EQU 250
+;IRQ Int_ModeJump Compare Raster Line
+IRQ_MODE_JUMP_COMPARE       EQU 100
+;IRQ MainMenu Compare
+IRQ_MAIN_MENU_COMPARE       EQU 240
+

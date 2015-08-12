@@ -7,10 +7,10 @@
 ;
 ;
 ; ZeroPage locations used:
-;       CursorPos, CursorColor
+;       cursor_pos, cursor_color
 
 ;Chars
-SpaceBar        EQU $20
+SPACE_BAR        EQU $20
 copyright_char  EQU 47
 tm_char         EQU 42
 
@@ -38,38 +38,38 @@ TextInit        subroutine
 
 
 
-; ******************* SMChrout *******************
+; ******************* PrintChar *******************
 ;
 ; Purpose:              output an ASCII character to screen
 ;
 ; Registers used:       .A, .X
 ;
-; Memory used:          CursorPos,CursorColor,ColorPos
+; Memory used:          cursor_pos,cursor_color,color_pos
 ;
 ; How to use:
 ;       Load .A with desired character. Call this routine.
 ;
-SMChrout        subroutine
+PrintChar        subroutine
         ldx #0
         cmp #64
         bmi .1
         sec
         sbc #64
-.1      sta (CursorPos,x)
-        ;lda CursorPos  ;determine corresponding color memory
-        ;sta Temp2
-        ;lda CursorPos+1
+.1      sta (cursor_pos,x)
+        ;lda cursor_pos  ;determine corresponding color memory
+        ;sta temp_w2
+        ;lda cursor_pos+1
         ;clc
         ;adc #$D4
-        ;sta Temp2+1
-        lda CursorColor ; color character
-        sta (ColorPos,x)
+        ;sta temp_w2+1
+        lda cursor_color ; color character
+        sta (color_pos,x)
 
-        inc CursorPos   ; next position
-        inc ColorPos
+        inc cursor_pos   ; next position
+        inc color_pos
         bne .2
-        inc CursorPos+1
-        inc ColorPos+1
+        inc cursor_pos+1
+        inc color_pos+1
 .2      rts
 
 
@@ -79,18 +79,18 @@ SMChrout        subroutine
 ;
 ; Registers used:       .A
 ;
-; Memory used:          CursorPos,ColorPos
+; Memory used:          cursor_pos,color_pos
 ;
 ; How to use:
 ;       Call this routine. Acts like a "backspace"
 ;
 BackSpace       subroutine
-        lda CursorPos
+        lda cursor_pos
         bne .1
-        dec CursorPos+1
-        dec ColorPos+1
-.1      dec CursorPos
-        dec ColorPos
+        dec cursor_pos+1
+        dec color_pos+1
+.1      dec cursor_pos
+        dec color_pos
         rts
 
 
@@ -100,29 +100,69 @@ BackSpace       subroutine
 ;
 ; Registers used:       .A, .Y
 ;
-; Memory used:          Temp(Ptr), Temp2(by SMChrout)
+; Memory used:          temp_w(Ptr), temp_w2(by PrintChar)
 ;
-; Subroutines called:   SMChrout
+; Subroutines called:   PrintChar
 ;
 ; How to use:
 ;       Load .A/.Y with pointer to C-string (<256 bytes). Call this routine.
-;       Note: leaves ptr to address AFTER C-string in Temp
+;       Note: leaves ptr to address AFTER C-string in temp_w
 ;
 Print   subroutine
-        STA Temp        ;prints a row of ASCII chars until it gets
-        STY Temp+1      ;       byte 0
-        LDY #0
-.get    LDA (Temp),y
-        BEQ .nxt
-        JSR SMChrout
-        INY
-        BNE .get
-.nxt    INY
-        TYA
-        CLC
-        ADC Temp
-        BCC .end
-        INC Temp+1
-.end    STA Temp
-        RTS
+        sta temp_w        ;prints a row of ASCII chars until it gets
+        sty temp_w+1      ;       byte 0
+        ldy #0
+.get    lda (temp_w),y
+        beq .nxt
+        jsr PrintChar
+        iny
+        bne .get
+.nxt    iny
+        tya
+        clc
+        adc temp_w
+        bcc .end
+        inc temp_w+1
+.end    sta temp_w
+        rts
+
+; ******************* PrintHex *******************
+;
+; Purpose:              print a hex number to screen
+;
+; Subroutines called:   PrintChar
+;
+; How to use:
+;       Load .A/.X with a pointer to the number
+;       Load .Y with the total number of bytes to print
+PrintHex        subroutine
+.num_w = temp_w
+.num_lsb = .num_w
+.num_msb = .num_w+1
+.total_bytes = temp_w2
+        sta .num_lsb
+        stx .num_msb
+        sty .total_bytes
+        ldy #0
+.1      lda (.num_w),y
+        pha
+        lsr
+        lsr
+        lsr
+        lsr
+        tax
+        lda .hex2ascii,x
+        jsr PrintChar
+        pla
+        and #$0F
+        tax
+        lda .hex2ascii,x
+        jsr PrintChar
+        lda #SPACE_BAR
+        jsr PrintChar
+        iny
+        cpy .total_bytes
+        bne .1
+        rts
+.hex2ascii      dc.b "0123456789ABCDEF"
 

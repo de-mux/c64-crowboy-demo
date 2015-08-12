@@ -3,10 +3,15 @@
 ;
 ; File : boot.a
 ;
-; Contains : Skeleton of the program. Mainly calls other routines.
+; Contains : Skeleton of the program, setup.
 ;
 ; Written for dasm, the 6502 cross-compiler(http://sourceforge.net/projects/dasm-dillon/)
 ; Assemble .prg file with: make
+
+; DEBUG constants -- uncomment a given debug feature to enable it
+;DEBUG_DISABLE_LOGO = 1  ; uncomment to disable logo
+;DEBUG_IRQ = 0
+
 SPRITE_DIR = "../sprites/"
 
 ; define the VIC-II 16K bank to use
@@ -29,52 +34,93 @@ CHARSET_2_BANK_SELECT_BITS = CHARSET_2_START_LOC / $400
 
         processor 6502
 
+        include "Macros.a"
+        include "system.a"
+        include "DTConstants.a"
 
 ; ************ ZERO PAGE VARIABLES ***********
         SEG.U ZeroPage
-        org $E2
+        org $02
 ZeroPage:
-;Menu
-MenuMode        DC.B 0  ; what mode the menu is in
+
+; Int_MainMenu
+menu_mode       DC.B 0  ; what mode the menu is in
+menu_next_mode  DC.B 0  ; store the value of the mode to set after fadeout
 
 ; Timing
-FrameToggle     DC.B 0  ; toggles between 0/1 every frame (so game is 30 fps)
-VProgramLoopInterrupt DC.W 0 ; Vector: where screenupdate will set the next interrupt
-NextIRQCompare  DC.B 0  ; Next interrupt scanline number
+frame_toggle    DC.B 0  ; toggles between 0/1 every IRQ, useful for when IRQ routine
+                        ; takes longer than screen refresh cycle
+v_program_loop_interrupt DC.W 0 ; Vector: where screenupdate will set the next interrupt
+next_irq_compare DC.B 0  ; Next interrupt scanline number
 
-; ScreenUpdate
-RoughScroll     DC.B 0  ; current level rough scroll pos(upper-left lo-byte)
-FineScroll      DC.B 0  ; smooth X scroll
-Page            DC.B 0  ; what page we're on (0 or 1)
+; Int_WorldScreenUpdate
+rough_scroll    DC.B 0  ; current level rough scroll pos(upper-left lo-byte)
+fine_scroll     DC.B 0  ; smooth X scroll
+screen_page     DC.B 0  ; what page we're on (0 or 1)
+onscreen_char_msb DC.B 0 ; the actual MSB of the current screen char memory
+offscreen_char_msb:
+offscreen_color_mem2_msb:
+                 DC.B 0 ; the actual MSB of the offscreen screen char memory
+                        ;  doubles as a 2nd offscreen work area for color memory
 
 ; Screen
-ScreenUpdateFlag DC.B 0 ; 1 means screen needs updating
-CursorColor     DC.B 0
-CursorPos       DC.W 0  ; position of cursor in screen memory
-ColorPos        DC.W 0  ; corresponding color location for cursor
+screen_update_flag DC.B 0 ; 1 means screen needs updating
+cursor_color    DC.B 0
+cursor_pos      DC.W 0  ; position of cursor in screen memory
+color_pos       DC.W 0  ; corresponding color location for cursor
+fade_mode       DC.B 0  ; indicates if the screen is not fading, fading in, fading out
+fade_table_index      DC.B 0  ; current fade index for screen(relative to beginning of fade table)
 
 ; General
-Temp            DC.W 0  ; temporary area for storing word addresses
-Temp2           DC.W 0
-Temp3           DC.W 0
+temp_w          DC.W 0  ; temporary area for storing word addresses
+temp_w2         DC.W 0
+temp_w3         DC.W 0
+temp_b          DC.B 0
+temp_b2         DC.B 0
+temp_b3         DC.B 0
 
 ; Game
-LevelHeaderFlags DC.B 0 ; see Levels below for meaning of bits
-ResetFlag       DC.B 0  ; whether or not game has been reset
-Mode            DC.B 0  ; mode of game (see DTGame.a)
+level_header_flags DC.B 0 ; see Levels below for meaning of bits
+reset_flag      DC.B 0  ; whether or not game has been reset
+mode            DC.B 0  ; mode of game (see DTGame.a)
 NextLevel       DC.W 0  ; ptr to the next level
 
 ; Music
 MusicZP         DC.B 0,0,0,0,0,0        ; used by music routine ($FA-$FF)
 
+        ; make sure zeropage defs don't overflow into page 1
+        IF . > $100
+        ERR
+        ENDIF
 
+        SEG.U offscreencolor
+; ************* Offscreen Color Area ***************
+        ; this must be multiple of $100
+        ;  for DrawLevelToOffscreen to work
+        org $0400,0
+offscreen_color_mem = .
 
-        include "Macros.a"
-        include "system.a"
+        ; store sprite colors, bg colors after color memory area
+        ;org OFFSCREEN_COLOR_MEM + $03E8,0
+        org . + $03E8,0
+offscreen_vic_ii_color_registers:
+offscreen_color_border  dc.b 0
+offscreen_color_bg0     dc.b 0
+offscreen_color_bg1     dc.b 0
+offscreen_color_bg2     dc.b 0
+offscreen_color_bg3     dc.b 0
+offscreen_color_spr_mc0 dc.b 0
+offscreen_color_spr_mc1 dc.b 0
+offscreen_color_sprites dc.b 0,0,0,0,0,0,0,0
+
+        IF . >= offscreen_color_mem + $400
+        ERR
+        ENDIF
 
 ; ************** BASIC HEADER ***************
         SEG header
         org $0801
+BASIC_START:
         DC.W BASEND,2002
         DC $9E
         DC "2061"
@@ -87,56 +133,62 @@ BASEND  DC.W 0
         org 2061
 Start:  sei
 
-        ldx #$FF                    ; reset stack
+        ldx #$FF                ; reset stack
         txs
-        cld                             ; clear decimal mode
-
-        ldx #($FF-ZeroPage)     ; reset zeropage variables
-        lda #0
-loop    sta ZeroPage,x
-        dex
-        bpl loop
+        cld                     ; clear decimal mode
 
         ; BASIC ROM($A000-$BFFF)/KERNAL ROM($E000-$FFFF) out
         lda #%00110101
-        sta PROCESSOR_PORT
+        sta CPU_PROCESSOR_PORT
+
+        ; reset zeropage variables
+        ldx #($100-ZeroPage)
+        lda #0
+.1      sta ZeroPage-1,x
+        dex
+        bne .1
+
+        jsr InitScreen
 
         ; do screen fade out
         lda #5
 .fader  pha
-        jsr FadeScreen
+        jsr FadeScreenOut
         ldx #5    ; wait time between fade
         jsr Wait
         pla
         sec
         sbc #1
         bne .fader
-        ;lda #0                     ; black screen
-        ;sta $D020
-        ;sta $D021
 
-
-        jsr ClearScreen             ;clear screen
+        jsr ClearCurrentScreen         ;clear screen
         spr_disable_all         ;turn off all sprites
         ; set VIC-II bank
         lda CIA2
         and #%11111100
         ora #VIC_BANK_SELECT_BITS
         sta CIA2
-
+        ; set screen memory and character memory banks
         lda #(SCREEN_1_BANK_SELECT_BITS + CHARSET_2_BANK_SELECT_BITS)
         sta VICMEM
+
+        IFNCONST DEBUG_DISABLE_LOGO
         jsr C64LOGO             ; show C64 Logo
+        ENDIF
         jsr TextInit            ; init text
+
         lda #ExitToMainMenu     ; get ready for main menu mode
         jsr SetMode
-        jmp InitIRQ             ; setup IRQ interrupt
 
-        ECHO "Writing Code Segment 1:     $080d -",.-1
+        ; setup IRQ interrupt. The rest of code execution happens
+        ;  through interrupts.
+        jmp InitIRQ
+
+        ECHO "Writing Code Segment 1:     ", Start, "-", .-1
 
         include "logo.a"
 
-        ECHO "Writing Logo Code:                -",.-1," (",($1000 - .), "bytes remaining. )"
+        ECHO "Writing Logo Code:                -", .-1, " (", ($1000 - .), "bytes remaining. )"
 
         DC "OH, WHAT A MEAL!",0
 copyright_string:
@@ -147,28 +199,23 @@ copyright_string:
 ;**************** DOWNTOWN DATA ****************
 ;
         SEG data
-; ************* Offscreen Color Area ***************
-OffscreenColor = $0400          ; this must be multiple of $100
-                                ;  for DrawLevelToOffscreen to work
-
 
 ; ************* BG/Char Colors 1 & 2 ***************
 ;
         org $1000,0
+        ECHO "Including colortables:"
+CHAR_COLOR_TABLES:
 BGColors1:
-Colors1 = .-$3D    ;$3FC3
+Colors1 = .-$3D    ;$0FC3
 
         incbin "chrset1.colortable"
 
-        ;$40C3
+        ECHO "    Colortable 1:          ", BGColors1, "-",.-1
+
+        ;$10C3
 BGColors2:
-Colors2 = .-$3D    ;$4086
+Colors2 = .-$3D    ;$1086
         ;incbin "chrset2.colortable"
-
-        ;$1186
-        ; ***** Variable Space *****
-
-        ECHO "Including 2 colortables:    $1000 -",.-1
 
 
 ; ************* Block data ***************
@@ -178,11 +225,11 @@ BlockData:
 BlockSet1:
         incbin "downtown1.blocks"
 
-        ECHO "Including Block Data 1:     $1200 -",.-1
+        ECHO "Including Block Data 1:    ", BlockSet1, "-",.-1
 
 BlockSet2:
         ;incbin "downtown2.blocks"
-        ECHO "Including Block Data 2:           -",.-1
+        ;ECHO "Including Block Data 2:           -",.-1
 
 
 ; ************* 16 Compressed Levels ***************
@@ -193,12 +240,11 @@ BlockSet2:
 ;       Bit 1 - what block set to use
 Levels:
 Level1:
-LevelHeaderSize set .
 ;   Header
-        DC.B CHARSET_1_BANK_SELECT_BITS                 ; chrset to use(12=$7000, 14=$7800)
+        DC.B CHARSET_1_BANK_SELECT_BITS                 ; chrset to use(bank 12 or 14)
         DC.W Level1             ; ptr to next level
         DC.B %00000000          ; level flags (see above)
-LevelHeaderSize set . - LevelHeaderSize
+LEVEL_HEADER_LENGTH SET . - Level1
 ;   Data
         incbin "downtown1.level"
 ;Level 2
@@ -207,69 +253,79 @@ LevelHeaderSize set . - LevelHeaderSize
 ;Level 5
 ;Level 6
 ;Level 7
-;Level 8
-;Level 9
-;Level 10
-;Level 11
-;Level 12
-;Level 13
-;Level 14
-;Level 15
-;Level 16
 
-        ECHO "Including",((.-$1A00)/1152),"Levels:        $1A00 -",.-1
+        ECHO "Including", [(.-Levels)/1152]d, "Levels:        ",Levels,"-",.-1
 ; ************* Screen 1 & 2 ***************
 ;
 Screen1 = VIC_BANK_START_LOC + SCREEN_1_BANK_START_LOC   ;$4C00, was $0400
 Screen2 = VIC_BANK_START_LOC + SCREEN_2_BANK_START_LOC   ;$6C00, was $2C00
-SCREEN_1_SPR_PTRS = Screen1 + SPRDATA_OFFSET
-SCREEN_2_SPR_PTRS = Screen2 + SPRDATA_OFFSET
+SCREEN_1_SPR_PTRS = Screen1 + SPR_PTR_OFFSET
+SCREEN_2_SPR_PTRS = Screen2 + SPR_PTR_OFFSET
 
+
+        org $3980,0
+        include "DTColorFadeTable.a"
+        ; this must not cross page boundaries
+        IF . > $3A00
+        ERR
+        ENDIF
 
 ; ************* Current Level Space ***************
 ;
         org $3A00,0
 CurLevel:
-        ECHO "Defining Level Area:       ",.," - $4bff"
+
         org $4C00,0
 CurLevelEnd = .-1
+        ECHO "Unpacked level area:       ", CurLevel, "-", CurLevelEnd
+
+        ECHO "Screen 1:                  ", Screen1, "-", Screen1 + $3ff
+        ECHO "Screen 2:                  ", Screen2, "-", Screen2 + $3ff
 
 
 ;**************** Sprites ****************
 ;
-        org $5000,0     ; area for C64 logo sprites ($1000-$14BF)
-Sprites:
-        org $54C0,0 ; in-game sprites
-        ;incbin SPRITE_DIR + "gamesprites.spr"
+        org $5000,0     ; area for C64 logo sprites (19 total)
+SPRITE_DATA:
+C64_LOGO_SPRITE_DATA:
+
+        org $54C0,0     ; in-game sprites
+GAME_SPRITE_DATA:
         incbin "gamesprites.spr"
 
-        ECHO "Including Sprite Data:      $5000 -",.-1
+        ECHO "Including Sprite Data:     ", SPRITE_DATA, "-", .-1
 
 
 ; ************* Charsets 1 & 2 ***************
 ;
-        org $7000,0
         ECHO "Including Character Sets:"
+        org $7000,0
 Charset1:               ; ($7000-$7800)
         incbin "chrset1.chr"
-        ECHO "    Including chrset1.chr:  $7000 -",.-1
+
+        ECHO "    Including chrset1.chr: ", Charset1, "-",.-1
+
         org $7800,0
 Charset2:               ; ($7800-$7FFF)
+
         org $7A00,0     ; C64 logo chars ($7A00-$7B1F chars 64-99)
         org $7B20,0     ; Ping logo ($7B20-$7C4F chars 100-138)
+PING_LOGO_CHAR_DATA:
         incbin "pinglogo.chr"
-        ECHO "    Including pinglogo.chr: $7b20 -",.-1
-        org $7C50,0     ;
+        ECHO "    Including pinglogo.chr:", PING_LOGO_CHAR_DATA, "-", .-1
 
-;       incbin "chrset2.chr"
+        ;org $7C50,0     ;
 
-        ECHO "    Including chrset2.chr:        -",.-1
+        ;incbin "chrset2.chr"
+
+        ;ECHO "    Including chrset2.chr:        -",.-1
 
 
 ;**************** DOWNTOWN CODE ****************
         SEG code
         org $A6D0,0
 
+CODE_SEGMENT_2:
         include "DTScreen.a"
         include "DTText.a"
         include "DTGraphics.a"
@@ -277,12 +333,12 @@ Charset2:               ; ($7800-$7FFF)
         include "DTUtil.a"
         include "DTGame.a"
         include "DTObjects.a"
-        ; information for sprite sequences, x offsets
+        ;; information for sprite sequences, x offsets
         include "DTSpriteInfo.a"
 
         ;include "system.a"
 
-        ECHO "Writing Code Segment 2:     $a6d0 -",.-1," (",($D000 - .),"bytes remaining. )"
+        ECHO "Writing Code Segment 2:    ",CODE_SEGMENT_2,"-",.-1," (",($D000 - .),"/",$D000-CODE_SEGMENT_2,"bytes remaining. )"
         ECHO ""
         ECHO ""
 

@@ -5,52 +5,67 @@
 ;
 ; Contains : General Screen subroutines
 ;
-;
-; ZeroPage locations used:
-;
 
-;Colors
-black           EQU 0
-white           EQU 1
-red             EQU 2
-cyan            EQU 3
-purple          EQU 4
-green           EQU 5
-blue            EQU 6
-yellow          EQU 7
-orange          EQU 8
-brown           EQU 9
-lred            EQU 10
-grey1           EQU 11
-grey2           EQU 12
-lgreen          EQU 13
-lblue           EQU 14
-grey3           EQU 15
-
-;IRQ Screen Update Compare
-SUCompare       EQU 250
-;IRQ ModeJump Compare Raster Line
-MJCompare       EQU 100
-;IRQ MainMenu Compare
-MMCompare       EQU 255
+; ******************* InitScreen *******************
+;
+; Purpose:              Must be called before any other screen routine.
+;                       Initializes screen variables.
+;
+InitScreen      subroutine
+        jsr UpdateOnscreenCharMSB
+        cmp #>Screen2
+        ; set offscreen memory area MSB
+        ; make sure it's not the current screen
+        bne .1
+        lda #>Screen1
+        jmp .2
+.1      lda #>Screen2
+.2      sta offscreen_char_msb
+        rts
 
 
-; ******************* ClearScreen *******************
+; ******************* UpdateOnscreenCharMSB *******************
 ;
-; Purpose:              Clear the current screen
+; Purpose:              Determines the current screen and updates
+;                         onscreen_char_msb
 ;
-; Registers used:       .A, .X
-;
-; How to use:
-;       Call this routine.
-;
-ClearScreen     subroutine
+; Returns:
+;       .A : the MSB of the current onscreen character memory
+UpdateOnscreenCharMSB subroutine
         lda VICMEM      ; what screen are we on?
         and #%11110000
         lsr
         lsr
         clc
         adc #>VIC_BANK_START_LOC
+        sta onscreen_char_msb
+        rts
+
+; ******************* ClearOffscreen *******************
+;
+; Purpose:              Clear the current screen
+;
+ClearOffscreen  subroutine
+        lda offscreen_char_msb
+        jmp ClearScreen
+
+; ******************* ClearCurrentScreen *******************
+;
+; Purpose:              Clear the current screen
+;
+ClearCurrentScreen  subroutine
+        jsr UpdateOnscreenCharMSB  ; get MSB of current screen (in .A)
+; fallthrough intentional
+; ******************* ClearScreen *******************
+;
+; Purpose:              Clear the screen memory specified by .A
+;
+; Registers used:       .A, .X
+;
+; Arguments:
+;       .A: MSB of screen memory to clear(for example, $04 to clear $0400-$07E8)
+;
+ClearScreen     subroutine
         pha         ; store screen memory MSB
         tax
         stx .1+2
@@ -61,7 +76,7 @@ ClearScreen     subroutine
         stx .4+2
 
         ldx #0
-        lda #SpaceBar
+        lda #SPACE_BAR
 .1      sta $0400,x  ; these base addresses get set above based on VIC bank and
 .2      sta $0500,x  ;   current screen mem bank
 .3      sta $0600,x
@@ -71,73 +86,233 @@ ClearScreen     subroutine
         ;lda #$04        ; reset cursor to top of screen memory
         pla             ; recall screen memory MSB
         ;lda #>Screen1        ; reset cursor to top of screen memory
-        stx CursorPos
-        sta CursorPos+1
+        stx cursor_pos
+        sta cursor_pos+1
         lda #>COLORMEM        ; reset corresponding color memory
-        stx ColorPos
-        sta ColorPos+1
+        stx color_pos
+        sta color_pos+1
         rts
 
-; ******************* ClearColors *******************
+
+; ******************* SetPage *******************
 ;
-; Purpose:              Clear color memory from $D800-$D8E8
+; Purpose:              Set current page to Screen1 or Screen2
+;
+; Registers used:       .A, .X, .Y
+;
+; How to use:
+;       Load .A with 0 for page at screen 1, 1 for page at screen 2
+;       Call this routine before starting the game loop
+;
+SetPage         subroutine
+        sta screen_page
+        lda VICMEM
+        and #%00001111
+        ldx screen_page
+        bne .2
+        ; select bank 1
+        ora #SCREEN_1_BANK_SELECT_BITS
+        ldx #>Screen1
+        ldy #>Screen2
+        jmp .1
+        ; select bank 2
+.2      ora #SCREEN_2_BANK_SELECT_BITS
+        ldx #>Screen2
+        ldy #>Screen1
+
+.1      sta VICMEM
+        stx onscreen_char_msb
+        sty offscreen_char_msb
+
+        rts
+
+
+; ******************* ClearBothScreens *******************
+;
+; Purpose:              Clear both screens
 ;
 ; Registers used:       .A, .X
 ;
 ; How to use:
 ;       Call this routine.
 ;
+ClearBothScreens subroutine
+        jsr ClearOffscreen
+        jsr ClearCurrentScreen
+        rts
+
+; ******************* ClearColors *******************
+;
+; Purpose:              Black out VIC-II screen color memory and color registers
+;
+; How to use:
+;       Call this routine.
+;
 ClearColors     subroutine
-        ldx #0
+        ldx #COLOR_BLACK
         txa
 .1      sta COLORMEM,x
         sta COLORMEM+$100,x
         sta COLORMEM+$200,x
-        sta COLORMEM+$2E9,x
+        sta COLORMEM+$300,x
         dex
         bne .1
+
+        ldx #[VIC_II_COLOR_REGISTERS_END - VIC_II_COLOR_REGISTERS]
+.2      sta VIC_II_COLOR_REGISTERS,x
+        dex
+        bpl .2
+
         rts
 
-; ******************* SMPlot *******************
+
+; ******************* SetCursorPosOffscreen *******************
 ;
 ; Purpose:              plot cursor at specified row/position
 ;
 ; Registers used:       .A, .X, .Y
 ;
-; Memory used:          CursorPos (ZP)
+; Memory used:          cursor_pos (ZP)
+;
+; Arguments:
+;       .X: row of desired position
+;       .Y: column of desired position
+;
+SetCursorPosOffscreen  subroutine
+        lda #>offscreen_color_mem
+        sta color_pos+1
+        lda offscreen_char_msb
+        jmp .4
+; fallthrough intentional
+; ******************* SetCursorPos *******************
+;
+; Purpose:              plot cursor at specified row/position
+;
+; Registers used:       .A, .X, .Y
+;
+; Memory used:          cursor_pos (ZP)
 ;
 ; How to use:
 ;       Load .X/.Y with row/column of desired position
 ;       Call this routine.
 ;
-SMPlot  subroutine
-        ;lda #$04        ; reset cursor and color pos to top-left
-        lda #>Screen1  ; reset cursor and color pos to top-left
-        sta CursorPos+1
+SetCursorPos  ; falls under SetCursorPosOffscreen subroutine, above
+        ; reset cursor and color pos to top-left
         lda #>COLORMEM
-        sta ColorPos+1
-        lda #$00
-        sta CursorPos
-        sta ColorPos
+        sta color_pos+1
+        lda onscreen_char_msb
+.4      sta cursor_pos+1
+.origin lda #$00
+        sta cursor_pos
+        sta color_pos
 .1      dex     ; find screen position of row .X
         bmi .2
         clc
         adc #SCREEN_WIDTH
         bcc .1
-        inc CursorPos+1
-        inc ColorPos+1
+        inc cursor_pos+1
+        inc color_pos+1
         bcs .1  ; branch always
-.2      sta CursorPos   ; add column .Y to cursor/color locations
-        sta ColorPos
+.2      sta cursor_pos   ; add column .Y to cursor/color locations
+        sta color_pos
         tya
         clc
-        adc CursorPos
+        adc cursor_pos
         bcc .3
-        inc CursorPos+1
-        inc ColorPos+1
-.3      sta CursorPos
-        sta ColorPos
+        inc cursor_pos+1
+        inc color_pos+1
+.3      sta cursor_pos
+        sta color_pos
         rts
+
+
+; ******************* DrawPic *******************
+;
+; Purpose:              Draw a pic from consecutive chars at current text cursor pos
+;
+; Registers used:       .A, .X, .Y
+;
+; Memory Used:          temp_w, temp_w+1, temp_w2
+;
+; How to use:
+;       Set cursor to desired top-left of picture with SetCursorPos or SetCursorPosOffscreen.
+;       Load .A with the first character.
+;       Load .X with the width in chars.
+;       Load .Y with the height.
+;
+DrawPic subroutine
+        sty temp_w2       ; temporary storage of A/X/Y
+        stx temp_w+1
+        sta temp_w
+.2      ldy #0
+.1      sta (cursor_pos),y ; copy char to screen
+        lda cursor_color   ; do color
+        sta (color_pos),y
+        inc temp_w        ; next char
+        lda temp_w
+        iny             ; next screen pos
+        dex             ; end of row?
+        bne .1          ;  no, do more
+        dec temp_w2       ; last row?
+        beq .done       ;  yeahm
+        lda cursor_pos   ; next row
+        clc
+        adc #SCREEN_WIDTH
+        bcc .3
+        inc cursor_pos+1
+        inc color_pos+1
+.3      sta cursor_pos
+        sta color_pos
+        ldx temp_w+1
+        lda temp_w
+        jmp .2
+.done   rts
+
+
+; ******************* DrawPicMap *******************
+;
+; Purpose:              Draw a pic from a character map(terminated by 0 a byte)
+;                        at current text cursor pos.
+;
+; Registers used:       .A, .X, .Y
+;
+; Memory Used:          temp_w, temp_w+1, temp_w2
+;
+; How to use:
+;       Set cursor to desired top-left of picture with SetCursorPos or SetCursorPosOffscreen.
+;       Load .A/.X with ptr to char map
+;       Load .Y with the width in chars.
+;Note: 0 <= .Y <= 40
+;
+DrawPicMap      subroutine
+        sta temp_w
+        stx temp_w+1
+        sty temp_w2       ; temporary storage of A/X/Y
+.2      ldy #0
+.1      lda (temp_w),y    ; get char from map
+        beq .done       ; 0 terminates char map
+        sta (cursor_pos),y ; copy char to screen
+        lda cursor_color   ; do color
+        sta (color_pos),y
+        iny             ; next screen pos
+        cpy temp_w2       ; end of row?
+        bne .1          ;  no, do more
+        lda cursor_pos   ; get ready for next row
+        clc
+        adc #SCREEN_WIDTH
+        bcc .3
+        inc cursor_pos+1
+        inc color_pos+1
+.3      sta cursor_pos
+        sta color_pos
+        lda temp_w
+        clc
+        adc temp_w2
+        bcc .4
+        inc temp_w+1
+.4      sta temp_w
+        jmp .2
+.done   rts
 
 
 ; ******************* SetCursorColor *******************
@@ -146,131 +321,280 @@ SMPlot  subroutine
 ;
 ; Registers used:       .A
 ;
-; Memory used:          CursorColor
+; Memory used:          cursor_color
 ;
 ; How to use:
 ;       Load .A with desired color. Call this routine.
 ;
 SetCursorColor  subroutine
-        sta CursorColor
+        sta cursor_color
         rts
 
 
-; ******************* ScreenUpdate *******************
+; ******************* PageFlip *******************
 ;
-; Purpose:              update the screen
+; Purpose:              Toggle page between screen memory at Screen1 and
+;                               screen memory at Screen2
+;
+; Registers used:       .A, .X
+;
+; How to use:
+;       Make sure screen_page represents the current screen address(0=Screen1, >0=Screen2).
+;       Call this routine.
+;
+PageFlip        subroutine
+        lda screen_page
+        eor #1          ; toggle screen_page #
+        jmp SetPage
+
+
+; ******************* _CopyOffscreenColorToColorMem2 *******************
+;
+; Purpose:              Copy offscreen color memory buffer to 2nd offscreen
+;                               color memory buffer. This is used to store target
+;                               colors for screen fades.
+;
+_CopyOffscreenColorToColorMem2    subroutine
+        ; Copy offscreen color info to onscreen color memory(world viewport only)
+        ;   this must be split up due to 6502 restriction on branch ranges
+        ldx #>offscreen_color_mem
+        ldy offscreen_color_mem2_msb
+        jsr CopyScreenArea
+        rts
+
+; ******************* FadeStart *******************
+;
+; Purpose:              Begin fade process
 ;
 ; Registers used:       .A, .X, .Y
 ;
-; Memory Used:          Temp, Temp+1, Temp2
+; How to use:
+;       For fade out, make sure that the data in offscreen_color_mem
+;               reflects the colors currently onscreen
+;       For a fade in, make sure that the data in offscreen_color_mem
+;               reflects what colors to fade in to
+;       Load .A with the fade mode (FADE_MODE_IN, FADE_MODE_OUT)
+;
+;       NOTE: don't do any page flipping or writing to offscreen memory
+;               while the screen is fading
+FadeStart       subroutine
+        cmp #FADE_MODE_IN
+        beq .1
+        ; fade out (start at last fade table entry)
+        jsr _CopyOffscreenColorToColorMem2
+        lda #<COLOR_FADE_TABLE_LAST
+        jmp .2
+.1:
+        ; fade in (start at table 0)
+        jsr ClearColors
+        jsr PageFlip
+        jsr _CopyOffscreenColorToColorMem2
+        jsr _UpdateOffscreenFade
+        lda #<COLOR_FADE_TABLE_0
+.2:
+        sta fade_table_index
+        rts
+
+; ******************* FadeScreenOut *******************
+;
+; Purpose:              Fade the screen out
+;
+; Registers used:       .A, .X, .Y
 ;
 ; How to use:
-;       Set IRQ vector to point here
-;       Load .A with the first character.
-;       Load .X with the width in chars.
-;       Load .Y with the height.
+;       Each time you call this routine the entire screen gets a shade darker.
 ;
-ScreenUpdate    subroutine
-        ;ldy #39
-        ;inc $d020
-        ;inc $d020
+FadeScreenOut      subroutine
+        ; cycles: 20403 (20.4 ms)
+        lda BORDER_COLOR
+        and #%00001111
+        tax
+        lda COLOR_FADE_TABLE,x
+        sta BORDER_COLOR
+        lda BG0_COLOR
+        and #%00001111
+        tax
+        lda COLOR_FADE_TABLE,x
+        sta BG0_COLOR
+        ldy #0          ; fade screen chars
 
-
-        ; Copy offscreen color info to color memory
-        ;This ugly looking piece is simply an unrolled loop, for ultra-fast
-        ;  processing
-        ldy #(SCREEN_WIDTH-1)           ; for 40 screen columns
-.1      lda OffscreenColor,y            ; 4
-        sta COLORMEM,y                  ; 4-5
-        lda OffscreenColor+40,y         ; 4
-        sta COLORMEM+40,y               ; 4-5
-        lda OffscreenColor+40*2,y       ; 4
-        sta COLORMEM+40*2,y             ; 4-5
-        lda OffscreenColor+40*3,y       ; 4
-        sta COLORMEM+40*3,y             ; 4-5
-        lda OffscreenColor+40*4,y       ; 4
-        sta COLORMEM+40*4,y             ; 4-5
-        lda OffscreenColor+40*5,y       ; 4
-        sta COLORMEM+40*5,y             ; 4-5
-        lda OffscreenColor+40*6,y       ; 4
-        sta COLORMEM+40*6,y             ; 4-5
-        lda OffscreenColor+40*7,y       ; 4
-        sta COLORMEM+40*7,y             ; 4-5
-        lda OffscreenColor+40*8,y       ; 4
-        sta COLORMEM+40*8,y             ; 4-5
-        lda OffscreenColor+40*9,y       ; 4
-        sta COLORMEM+40*9,y             ; 4-5
-        lda OffscreenColor+40*10,y      ; 4
-        sta COLORMEM+40*10,y            ; 4-5
-        lda OffscreenColor+40*11,y      ; 4
-        sta COLORMEM+40*11,y            ; 4-5
-        lda OffscreenColor+40*12,y      ; 4
-        sta COLORMEM+40*12,y            ; 4-5
-        lda OffscreenColor+40*13,y      ; 4
-        sta COLORMEM+40*13,y            ; 4-5
-        lda OffscreenColor+40*14,y      ; 4
-        sta COLORMEM+40*14,y            ; 4-5
-        lda OffscreenColor+40*15,y      ; 4
-        sta COLORMEM+40*15,y            ; 4-5
-        lda OffscreenColor+40*16,y      ; 4
-        sta COLORMEM+40*16,y            ; 4-5
-        lda OffscreenColor+40*17,y       ; 4
-        sta COLORMEM+40*17,y            ; 4-5
-
+        ldy #250        ; 4 250-byte chunks
+.1:
+CHUNK   SET     0
+        REPEAT 4
+        lda COLORMEM + (250 * CHUNK) - 1,y
+        and #%00001111
+        tax
+        lda COLOR_FADE_TABLE,x
+        sta COLORMEM + (250 * CHUNK) - 1,y
+CHUNK   SET     CHUNK + 1
+        REPEND
         dey
+        bne .1
+        rts
+
+; ******************* FadeOffscreenIn *******************
+; Purpose:              Fade screen one shade lighter
+;
+; Usage:
+;       Before calling this routine, call FadeStart
+;       Call this routine every frame to fade the screen one shade lighter
+;
+; Returns:
+;       .A : 0 if fade has completed, 1 if fade has not yet completed
+;
+FadeOffscreenIn         subroutine
+        lda fade_table_index
+;        cmp #<COLOR_FADE_TABLE_0
+;        bne .1
+;        ; if we're at the beginning of the fade, 
+;.1:
+        cmp #<COLOR_FADE_TABLE_LAST
+        beq .fade_complete
+
+        clc
+        adc #COLOR_FADE_TABLE_ROW_LENGTH
+        sta fade_table_index
+        jsr _UpdateOffscreenFade
+        jmp .fade_not_complete
+; fallthrough intentional
+; TODO: combine this with FadeScreenOut
+; ******************* FadeOffscreenOut *******************
+; Purpose:              Fade screen one shade darker
+;
+; Usage:
+;       Before calling this routine, call FadeStart
+;       Call this routine every frame to fade the screen one shade darker
+;
+; Returns:
+;       .A : 0 if fade has completed, 1 if fade has not yet completed
+;
+FadeOffscreenOut
+        lda fade_table_index
+        IF <COLOR_FADE_TABLE_0 != 0
+        cmp #<COLOR_FADE_TABLE_0
+        ENDIF
+        beq .fade_complete
+
+        sec
+        sbc #COLOR_FADE_TABLE_ROW_LENGTH
+        sta fade_table_index
+        jsr _UpdateOffscreenFade
+
+.fade_not_complete:
+        lda #1
+        rts
+.fade_complete:
+        lda #0
+        rts
+
+
+; ******************* _UpdateOffscreenFade *******************
+; Purpose:              Update offscreen color based on current fade index
+;
+; Usage:
+;       Setup fade_table_index to point to the LSB in the COLOR_FADE_TABLE
+;               of the current fade index
+;
+; cycles: 20418 (1.04 frames PAL, 1.19 frames NTSC)
+;
+_UpdateOffscreenFade      subroutine
+        ; TODO: treat multicolor differently
+
+        ; (self-modifying code) setup base addresses for source and dest
+        ldx offscreen_color_mem2_msb
+        ldy #>offscreen_color_mem
+        stx .src+2
+        sty .dst+2
+        ; (self-modifying code) setup LSB of color fade table pointer
+        lda fade_table_index
+        sta .cf+1
+
+        ldy #0
+.byte:
+.src    ldx $F000,y
+.cf     lda COLOR_FADE_TABLE,x
+.dst    sta $F000,y
+        dey
+        bne .byte
+        inc .src+2
+        inc .dst+2
+        lda .dst+2
+        cmp #[>offscreen_color_mem + 4]
+        bne .byte
+        rts
+
+
+; ******************* CopyScreenArea *******************
+;
+; Purpose:              Copy a chunk of screen(char or color) to another
+;                               area in memory. If the source address is the
+;                               first address of VIC-II color memory, then the
+;                               low-nibble of each byte is masked before writing to
+;                               destination, and sprite and background colors are
+;                               copied as well.
+; Input:
+;       .X : the MSB of the source chunk
+;       .Y : the MSB of the destination memory
+;
+CopyScreenArea      subroutine
+        ; if source is VIC-II color memory, we need to mask off the low-nibble of
+        ;  each byte before storing
+        cpx #>COLORMEM
+        beq .src_is_colormem
+
+        ; (self-modifying code) setup base addresses for source and dest
+        stx .src+2
+        sty .dst+2
+
+        ldx #[SCREEN_MEMORY_SIZE / CPU_PAGE_SIZE]
+        ldy #0
+.byte:
+.src    lda $F000,y
+.dst    sta $F000,y
+        dey
+        bne .byte
+        inc .src+2
+        inc .dst+2
+        dex
+        bne .byte
+        rts
+
+.src_is_colormem:
+        ; (self-modifying code) setup base addresses for source and dest
+        stx .src2+2
+        sty .dst2+2
+        iny
+        iny
+        iny
+        sty .dst3+2
+
+        ldx #[SCREEN_MEMORY_SIZE / CPU_PAGE_SIZE]
+        ldy #0
+.byte2:
+.src2   lda $F000,y
+        and #$0F
+.dst2   sta $F000,y
+        dey
+        bne .byte2
+        inc .src2+2
+        inc .dst2+2
+        dex
+        bne .byte2
+
+        ; copy other VIC-II color registers(sprites, border/bg colors)
+        ldx #[VIC_II_COLOR_REGISTERS_END - VIC_II_COLOR_REGISTERS]
+.1:
+        lda VIC_II_COLOR_REGISTERS,x
+        and #$0F
+.dst3   sta $F3E8,x
+        dex
         bpl .1
-
-        ;   scroll screen to fine X dot position
-        ; scanline moving into play area view, set scroll
-        lda VIC2       ; vic control register
-        and #%11111000  ; clear low 3 bits
-        ora FineScroll  ; set low 3 bits to scroll value
-        sta VIC2
-
-        ; perform page-flip
-        jsr PageFlip
-
-        ; copy sprite pointers to screen memory
-        ;ldx #$07                ; if page=1, use screen $0400
-        ldx #>SCREEN_1_SPR_PTRS                ; if page=1
-        ;lda Page                ; if page=0, use screen $2F00
-        lda Page                ; if page=0
-        bne .usp1
-        ldx #>SCREEN_2_SPR_PTRS
-.usp1   stx .spr+2
-        ldx #<SPRDATA_OFFSET
-        stx .spr+1
-        ldx #7                  ; copy
-.usp2   lda o_info,x            ; carry = facing bit
-        lsr
-        lsr
-        lda S_spriteDataPtr,x
-        adc #0                  ; add carry to .A (facing bit)
-.spr    sta $FFFF,x
-        dex
-        bpl .usp2
-
-        ; position sprites
-        ldx #16                 ; the 16th index is the sprite X MSBs
-.ps1    lda S_XYPos,x
-        sta SPR0X,x
-        dex
-        bpl .ps1
-
-        ; enable/disable sprites
-        lda S_enable
-        sta SPRDISP
-
-
-        ; set interrupt back to ModeJump
-        lda #MJCompare
-        sta IRQ
-        set_interrupt #ModeJump
-        jmp ModeExit
+        rts
 
 
 ;PrepareNextInterrupt   subroutine
-;       set_interrupt VProgramLoopInterrupt
-;       lda NextIRQCompare
+;       set_interrupt v_program_loop_interrupt
+;       lda next_irq_compare
 ;       sta $D012
 ;       rts
