@@ -10,16 +10,31 @@
 ;              PAL 312 scanlines x 63 cycles x 50Hz = 0,9828 MHz
 
 ;Modes
-WorldUpdate             EQU 0
-NewGame                 EQU 1
-SetupLevel              EQU 2
-FinishLevel             EQU 3
-LoseLife                EQU 4
-GameOver                EQU 5
+_GAME_MODE_WORLD_UPDATE             EQU 0
+; TODO: does this need to be a mode?
+_GAME_MODE_NEW_GAME                 EQU 1
+_GAME_MODE_SETUP_LEVEL              EQU 2
+_GAME_MODE_FINISH_LEVEL             EQU 3
+_GAME_MODE_LOSE_LIFE                EQU 4
+_GAME_MODE_GAME_OVER                EQU 5
 
-ExitToMainMenu          EQU 7
-FadeIn                  EQU 8
-FadeOut                 EQU 9
+_GAME_MODE_EXIT_TO_MAIN_MENU        EQU 7
+_GAME_MODE_FADE_IN                  EQU 8
+_GAME_MODE_FADE_OUT                 EQU 9
+
+
+; ******************* NewGame *******************
+;
+; Purpose:              Start new game
+;
+; Prerequisites:
+;       Make sure IRQ has been set up.
+;
+NewGame         subroutine
+        lda #_GAME_MODE_NEW_GAME
+        jsr SetMode
+        set_interrupt #Int_ModeJump
+        rts
 
 
 ; ******************* SetMode *******************
@@ -105,7 +120,7 @@ DoNewGame       subroutine
 
         set_level 1             ; start at Level 1
 
-        set_mode SetupLevel
+        set_mode _GAME_MODE_SETUP_LEVEL
         rts
 
 
@@ -251,7 +266,7 @@ DoSetupLevel    subroutine
         ; create the player object
         jsr SetupPlayer
 
-        set_mode WorldUpdate    ;start game running
+        set_mode _GAME_MODE_WORLD_UPDATE    ;start game running
         rts
 
 

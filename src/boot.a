@@ -177,12 +177,19 @@ Start:  sei
         ENDIF
         jsr TextInit            ; init text
 
-        lda #ExitToMainMenu     ; get ready for main menu mode
-        jsr SetMode
-
         ; setup IRQ interrupt. The rest of code execution happens
         ;  through interrupts.
-        jmp InitIRQ
+        jsr InitIRQ
+        ; point interrupt to main menu routine
+        jsr DoExitToMainMenu
+
+        ; enable interrupt
+        cli
+
+        ; loop infinitely until program has been reset
+.loop   lda reset_flag
+        beq .loop
+        jmp Start
 
         ECHO "Writing Code Segment 1:     ", Start, "-", .-1
 
@@ -334,10 +341,8 @@ CODE_SEGMENT_2:
         include "util.a"
         include "game.a"
         include "objects.a"
-        ;; information for sprite sequences, x offsets
+        ; information for sprite sequences, x offsets
         include "sprite_info.a"
-
-        ;include "system.a"
 
         ECHO "Writing Code Segment 2:    ",CODE_SEGMENT_2,"-",.-1," (",($D000 - .),"/",$D000-CODE_SEGMENT_2,"bytes remaining. )"
         ECHO ""

@@ -17,7 +17,11 @@
 ; Memory used:          $FFFA-$FFFF(hardware vectors)
 ;
 ; Usage:
-;       Call SetMode to set the mode, then call this routine.
+;       Disable interrupts.
+;       Use set_interrupt macro to set interrupt jump vector.
+;       Set RASTER_COMPARE to desired scanline.
+;       Call this routine.
+;       Enable interrupts.
 ;
 InitIRQ subroutine
         ; clear reset flag
@@ -46,16 +50,8 @@ InitIRQ subroutine
         lda CIA2_INT_CTRL
         asl VICINT      ; ACK VIC interrupts
 
-        ; point interrupt to main menu routine
-        ; FIXME: mode should be set outside of this routine
-        jsr DoExitToMainMenu
+        rts
 
-        cli             ; enable interrupt
-
-        ; loop infinitely until program has been reset
-.loop   lda reset_flag
-        beq .loop
-        jmp Start
 .vectors        DC.W NMIRestore, BRKVector, IRQEnter
 ;.vectors       DC.W $EA31, $FE66, $FE47
 

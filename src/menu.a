@@ -284,9 +284,7 @@ _DoMenuFadeOut  subroutine
         rts
 
 .1:
-        lda #NewGame    ;   set mode to do new game
-        jsr SetMode
-        set_interrupt #Int_ModeJump
+        jsr NewGame
 
         ; for testing purposes
         ;ldx #$40
