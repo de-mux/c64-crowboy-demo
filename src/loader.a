@@ -1,10 +1,10 @@
-;"Downtown"
+;"Crow Boy"
 ;(c) 2002 by Eric Odland
 ;
-; File : DTLoader.a
+; File : loader.a
 ;
-; Contains : Loader for "Downtown". This is the first program to be run.
-;			Does nothing but clear screen to black and load "Downtown" game.
+; Contains : Loader for "Crow Boy". This is the first program to be run.
+;			Does nothing but clear screen to black and load "Crow Boy" game.
 ;           (at $mainprg)
 ;
 ; Note: This is a common trick used by many programmers to run a loaded program

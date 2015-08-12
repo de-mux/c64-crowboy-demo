@@ -1,0 +1,148 @@
+; "Crow Boy"
+;(c) 2002 by Eric Odland
+;
+; File : irq.a
+;
+; Contains : IRQ handling routines
+;
+
+; Function Name:        InitIRQ
+;
+; Purpose:              Setup main IRQ Mode Jump
+;                               and enable interrupts.
+;                               Set mode to go to main menu.
+;
+; Registers used:       .A, .X
+;
+; Memory used:          $FFFA-$FFFF(hardware vectors)
+;
+; Usage:
+;       Call SetMode to set the mode, then call this routine.
+;
+InitIRQ subroutine
+        ; clear reset flag
+        lda #0
+        sta reset_flag
+
+        lda #%01111111
+        ; disable all CIA1/2 interrupts(timer A/B, TOD clock, serial shift)
+        sta CIA1_INT_CTRL
+        sta CIA2_INT_CTRL
+        lda #%00000001
+        sta IRQMASK     ; Enable raster interrupts(D01A)
+        ; Fine-scroll vert=3, 25 rows, clear hi-bit of raster compare,
+        ;  disable bitmap and extended char mode
+        lda #%00011011
+        sta VIC1        ; D011
+
+        ldx #5          ;set IRQ interrupt vectors
+.1      lda .vectors,x  ; use hardware vectors at $FFFA
+        sta HW_VECT,x
+        dex
+        bpl .1
+
+        ; ACK CIA 1/2 interrupts
+        lda CIA1_INT_CTRL
+        lda CIA2_INT_CTRL
+        asl VICINT      ; ACK VIC interrupts
+
+        ; point interrupt to main menu routine
+        ; FIXME: mode should be set outside of this routine
+        jsr DoExitToMainMenu
+
+        cli             ; enable interrupt
+
+        ; loop infinitely until program has been reset
+.loop   lda reset_flag
+        beq .loop
+        jmp Start
+.vectors        DC.W NMIRestore, BRKVector, IRQEnter
+;.vectors       DC.W $EA31, $FE66, $FE47
+
+
+; Function Name:        IRQEnter
+;
+; Purpose:              push registers on stack, then jump to interrupt
+;                               vector at SOFT_INTERRUPT_VECT
+;
+; How to use:
+;       Disable interrupts.
+;       Set up IRQ interrupt at $FFFE to point to this routine.
+;       Set up interrupt vector SOFT_INTERRUPT_VECT with set_interrupt macro.
+;       Enable interrupts.
+;
+IRQEnter        subroutine
+        ; store registers
+        pha
+        txa
+        pha
+        tya
+        pha
+
+        IFCONST DEBUG_IRQ
+        lda #1
+        sta BORDER_COLOR     ; indicator of where IRQ starts
+        ENDIF
+
+        tsx
+        lda $0100+4,X   ;Get break flag
+        and #$10        ; set?
+        beq .doirq      ; no
+        jmp BRKVector   ; do break
+.doirq  jmp (SOFT_INTERRUPT_VECT)
+
+IRQExit         subroutine
+        ; visual indicator of where IRQ ends
+        IFCONST DEBUG_IRQ
+        lda #0
+        sta BORDER_COLOR
+        ENDIF
+
+        asl VICINT
+        pla
+        tay
+        pla
+        tax
+        pla
+        rti
+
+BRKVector       subroutine
+        lda #1
+        sta BORDER_COLOR
+        lda #COLOR_WHITE
+        jsr SetCursorColor
+        jsr ClearCurrentScreen
+        lda #<.err_txt
+        ldy #>.err_txt
+        jsr Print
+
+        ; print the last few bytes on the stack
+        ldx #1
+        ldy #2
+        jsr SetCursorPos
+
+        lda #<.stack_txt
+        ldy #>.stack_txt
+        jsr Print
+.stack_bytes = temp_b
+        tsx
+        stx .stack_bytes
+        lda #$00
+        sec
+        sbc temp_b
+        tay
+        txa
+.1      ldx #>CPU_STACK
+        ;ldy #.stack_bytes
+        jsr PrintHex
+
+        ldx #$FF
+        jsr Wait
+        ldx #$FF
+        jsr Wait
+        jmp Start
+.err_txt    DC "A MIND-BLOWING ERROR HAS OCCURRED.",0
+.stack_txt  DC "STACK - ",0
+
+NMIRestore      subroutine
+        rti

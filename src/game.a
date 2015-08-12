@@ -1,0 +1,420 @@
+; "Crow Boy"
+;(c) 2002 by Eric Odland
+;
+; File : game.a
+;
+; Contains : Main game driver/subroutines
+;
+
+; Timing info: NTSC 263 scanlines x 65 cycles x 60Hz = 1,0257 MHz
+;              PAL 312 scanlines x 63 cycles x 50Hz = 0,9828 MHz
+
+;Modes
+WorldUpdate             EQU 0
+NewGame                 EQU 1
+SetupLevel              EQU 2
+FinishLevel             EQU 3
+LoseLife                EQU 4
+GameOver                EQU 5
+
+ExitToMainMenu          EQU 7
+FadeIn                  EQU 8
+FadeOut                 EQU 9
+
+
+; ******************* SetMode *******************
+;
+; Purpose:              set current game mode
+;
+; Registers used:       .A
+;
+; Memory used:          mode
+;
+; How to use:
+;       Load .A with desired mode and call this routine.
+;
+SetMode subroutine
+        sta mode
+        rts
+
+
+; Function Name:        Int_ModeJump
+;
+; Purpose:              Determine what mode the game is in
+;                               and jump to appropriate subroutine.
+;
+; How to use:
+;       Disable interrupts.
+;       Set up IRQ interrupt to point to this routine with set_interrupt macro.
+;       Enable interrupts.
+;
+Int_ModeJump        subroutine
+        ;inc $d020     ; indicator of where IRQ starts
+
+        ; toggle between 0 and 1
+        ;  0 means do game update
+        ;  1 means setup screen update at scanline IRQ_SCREEN_UPDATE_COMPARE and RTI
+        ;lda frame_toggle
+        ;eor #1
+        ;sta frame_toggle
+        ;bne .1
+
+        ;jsr RequestWorldScreenUpdate
+        ;jmp ModeExit
+
+        ; setup next interrupt for game update
+.1      lda #>(ModeExit-1)      ; setup RTS to jump to ModeExit
+        pha
+        lda #<(ModeExit-1)
+        pha
+
+        ; mode jump table
+        lda mode
+        beq .DoWorldUpdate
+        tax
+        dex
+        beq .DoNewGame
+        dex
+        beq .DoSetupLevel
+        dex
+        beq .DoFinishLevel
+        dex
+        beq .DoLoseLife
+        dex
+        beq .DoGameOver
+        dex
+        beq .DoMainMenu
+        dex
+        beq .DoExitToMainMenu
+        rts                     ; jumps to ModeExit if no mode...
+ModeExit:
+        jmp IRQExit
+; Jump Table
+.DoWorldUpdate    jmp DoWorldUpdate
+.DoNewGame        jmp DoNewGame
+.DoSetupLevel     jmp DoSetupLevel
+.DoFinishLevel    jmp DoFinishLevel
+.DoLoseLife       jmp DoLoseLife
+.DoGameOver       jmp DoGameOver
+.DoMainMenu       jmp DoMainMenu
+.DoExitToMainMenu jmp DoExitToMainMenu
+
+
+DoNewGame       subroutine
+        jsr InitGameGraphics
+
+        set_level 1             ; start at Level 1
+
+        set_mode SetupLevel
+        rts
+
+
+; Mode Name:            DoSetupLevel
+;
+; Purpose:              Read a level and decode it into the current
+;                               level space
+;
+; Memory Used:          word temp_w, word temp_w2, byte temp_w3, word NextLevel
+;
+; Data Used:            BlockSet1, BlockSet2, CurLevel, Level Data
+;
+; Before use:
+;       Store ptr to level data into NextLevel using the macro
+;               set_level [level#] or by other means
+;       set_mode DoSetupLevel
+;
+DoSetupLevel    subroutine
+        ldy #0                  ; read level header
+        lda (NextLevel),y       ; push chrset to use on stack
+        pha
+        iny
+        lda (NextLevel),y
+        pha                     ; push ptr to next level on stack
+        iny
+        lda (NextLevel),y
+        pha
+        iny
+        lda (NextLevel),y       ; push level flags on stack
+        pha
+        sta level_header_flags  ; store level flags in ZeroPage
+
+        ; set ptr to beginning of level block data
+        lda #LEVEL_HEADER_LENGTH
+        clc
+        adc NextLevel
+        bcc .1
+        inc NextLevel+1
+.1      sta NextLevel
+
+        pla                     ; get level flags from stack
+        lsr
+        bcs .color2
+        ; decode level flags
+        ldx BGColors1+0
+        stx BG0_COLOR
+        ldx BGColors1+1         ; what color set? Set BG colors 0-2
+        ldy BGColors1+2
+        bpl .nxt                ; branch always
+.color2 ldx BGColors2+0
+        stx BG0_COLOR
+        ldx BGColors2+1
+        ldy BGColors2+2
+.nxt    stx BG1_COLOR
+        sty BG2_COLOR
+
+        ldx #>BlockSet1
+        lsr                     ; what block set? (0 or 1)
+        bcc .setup              ;  branch if blockset it 0
+        ldx #>BlockSet2
+        ; get below routine ready for decode(caution! self-modifying code!!)
+.setup  stx .upLft+2            ; set these to point to block data
+        inx
+        stx .loLft+2
+        inx
+        stx .upRt+2
+        inx
+        stx .loRt+2
+        lda NextLevel           ; more self-modifying stuff
+        ldy NextLevel+1
+        sta .nxtLev+1
+        sty .nxtLev+2
+
+        pla                     ; pull ptr to next level from stack
+        sta NextLevel+1         ;  store in memory
+        pla
+        sta NextLevel
+
+        ; set temp_w and temp_w2 to point to current level memory
+        ldx #<CurLevel          ; this is where the level will be decoded
+        ldy #>CurLevel
+        stx temp_w              ; temp_w = even rows
+        sty temp_w+1
+        iny                     ; temp_w2 = odd rows
+        stx temp_w2
+        sty temp_w2+1
+
+        ; level decoder, block by block
+        ;   copy decoded blocks into current level memory
+        ldy #0
+.decode ldx #0
+
+.st     stx temp_w3             ; temporarily store .X
+.nxtLev lda $FFFF,x             ; get byte from row of level data
+        tax
+
+.upLft  lda BlockData,x         ;  .x = block #, .y = decoded level column
+        sta (temp_w),y
+.loLft  lda BlockData+$100,x
+        sta (temp_w2),y
+        iny
+.upRt   lda BlockData+$200,x
+        sta (temp_w),y
+.loRt   lda BlockData+$300,x
+        sta (temp_w2),y
+;
+        ldx temp_w3
+        inx                     ; set x to point to next byte in level data
+        iny                     ; set y to point to next block decode to the right(in current level)
+;
+        bne .st                 ; not at end of row yet
+        lda #LEVEL_PACKED_WIDTH ; get ready for next row
+        clc
+        adc .nxtLev+1
+        bcc .2
+        inc .nxtLev+2
+.2      sta .nxtLev+1
+        inc temp_w+1            ; shift each temp_w down 2 rows
+        inc temp_w+1
+        inc temp_w2+1
+        inc temp_w2+1
+        lda temp_w+1            ;  is temp_w past bottom of level memory?
+        cmp #>(CurLevelEnd+1)
+        bne .decode             ;       no, do more rows
+
+        lda #0                  ; start at left-hand side of level
+        sta rough_scroll
+        lda #0
+        sta fine_scroll
+
+        ; set ChrSet
+        pla                     ; get ChrSet to use for this level
+        sta temp_w
+        lda VICMEM
+        and #%11110000
+        ora temp_w
+        sta VICMEM
+
+        ; disable all sprites
+        lda #0
+        sta S_enable
+
+        ; create the player object
+        jsr SetupPlayer
+
+        set_mode WorldUpdate    ;start game running
+        rts
+
+
+;flipbit DC.B 0
+DoWorldUpdate   subroutine
+        ; read user input and take action
+        jsr ReadJoy
+        ; store fire button value and y value for later
+        lda #0
+        bcs .nf                 ;
+        lda #1                  ;
+.nf     sta .fire               ; 0 or 1
+        sty .y
+        ;stx temp_w3
+        cpx #0
+        bpl .1
+        ;ldx #0                 ; if X = -1, run left
+        lda #run
+        ldy #left
+        ;jsr RequestAction
+        jmp .3                  ; else
+.1      beq .2
+        ;ldx #0                 ; if X = 1, run right
+        lda #run
+        ldy #right
+        ;jsr RequestAction
+        jmp .3                  ; else
+.2      ;ldx #0                 ; stand
+        lda #stand
+        ;jsr RequestAction
+
+.3      ldx #0
+        jsr RequestAction
+        ldy .y                  ; if Y = -1
+        bpl .4
+        ldx #0                  ; jump
+        lda #jump
+        jsr RequestAction
+
+.4      lda .fire               ; if (fire) then attack
+        beq .5
+        ldx #0
+        lda #attack
+        jsr RequestAction
+        jmp .5
+.fire   dc.b 0
+.y      dc.b 0
+
+.5:
+        ; update sprite data pointers from animation sequences
+        subroutine
+        ldx #0
+        lda S_spriteDataPtr,x   ; .Y = sprite #
+        tay
+        lda SpriteSequence,y
+        sta S_spriteDataPtr,x
+
+        ; update sprite position from velocity
+        lda o_info,x            ; carry = facing bit
+        lsr
+        lsr
+        bcc .1                  ; if facing left, iny
+        iny
+.1      lda SpriteOffset,y      ; temp_w = SpriteOffset[y]
+        bne .2
+        lda o_velX,x            ; if 0, temp = o_velX[x]
+.2      sta temp_w
+        txa
+        tay                     ; y = object #
+        asl                     ; X = X*2
+        tax
+        lda S_XYPos,x           ; add sprite velocity to current X position
+        clc
+        adc temp_w
+        sta S_XYPos,x
+        inx                     ; add sprite vel to current Y position
+        lda S_XYPos,x
+        sta temp_w
+        lda o_velY,y
+        clc
+        adc temp_w
+        sta S_XYPos,x
+
+        cmp #kSpriteGroundLevel ; is sprite at ground level?
+        beq .4                  ; yes, do nothing
+        bpl .3                  ; above ground level?
+        tya
+        tax
+        inc o_velY,x            ;   yes, increase downward velocity
+        clc
+        bcc .4                  ;   jump always
+.3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
+        sta S_XYPos,x           ;
+        lda #0                  ;   reset velocity
+        sta o_velY,y            ;
+        lda #stand              ;   set to standing
+        sta o_currentAction,y
+.4
+        ; smooth scroll screen
+        subroutine
+        lda S_XYPos             ; get player's(sprite 0) X position
+        sec
+        sbc #160                ; X distance from center
+        bpl .1
+        lsr                     ; divide by 4
+        lsr
+        ora #%11000000          ; extend sign
+        jmp .2
+.1      lsr
+        lsr
+.2      sta temp_w
+        lda fine_scroll
+        sec                     ; add offset to finescroll
+        sbc temp_w
+        bpl .3                  ; if result is negative, increase roughscroll
+        inc rough_scroll
+        jmp .4
+.3      cmp #8
+        bmi .4
+        dec rough_scroll
+.4      and #%00000111
+        sta fine_scroll
+        lda S_XYPos             ; add offset to sprite position
+        sec
+        sbc temp_w
+        sta S_XYPos
+        lda temp_w
+        clc
+        and #%11111000
+        bpl .5
+        sec
+        ora #%00000111
+.5      ror                     ; add offset to roughscroll
+        ror
+        ror
+.6      adc rough_scroll
+        sta rough_scroll
+
+        ; re-update sprite positions
+        ;lda temp_w
+
+        ; TODO: this only needs to happen if rough scroll has changed
+        jsr DrawLevelToOffscreen
+
+        ;lda #1                 ; tell screenUpdate to update screen
+        ;sta ScreenNeedsUpdating
+        jsr RequestWorldScreenUpdate
+
+        rts
+
+
+DoFinishLevel   subroutine
+        rts
+
+
+DoLoseLife      subroutine
+        rts
+
+
+DoGameOver      subroutine
+        rts
+
+
+DoMainMenu      subroutine
+        rts
+

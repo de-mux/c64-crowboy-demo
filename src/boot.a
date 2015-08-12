@@ -1,4 +1,4 @@
-; "Downtown"
+; "Crow Boy"
 ;(c) 2002 by Eric Odland
 ;
 ; File : boot.a
@@ -34,9 +34,9 @@ CHARSET_2_BANK_SELECT_BITS = CHARSET_2_START_LOC / $400
 
         processor 6502
 
-        include "Macros.a"
+        include "macros.a"
         include "system.a"
-        include "DTConstants.a"
+        include "constants.a"
 
 ; ************ ZERO PAGE VARIABLES ***********
         SEG.U ZeroPage
@@ -82,7 +82,7 @@ temp_b3         DC.B 0
 ; Game
 level_header_flags DC.B 0 ; see Levels below for meaning of bits
 reset_flag      DC.B 0  ; whether or not game has been reset
-mode            DC.B 0  ; mode of game (see DTGame.a)
+mode            DC.B 0  ; mode of game (see game.a)
 NextLevel       DC.W 0  ; ptr to the next level
 
 ; Music
@@ -264,7 +264,7 @@ SCREEN_2_SPR_PTRS = Screen2 + SPR_PTR_OFFSET
 
 
         org $3980,0
-        include "DTColorFadeTable.a"
+        include "color_fade_table.a"
         ; this must not cross page boundaries
         IF . > $3A00
         ERR
@@ -326,15 +326,16 @@ PING_LOGO_CHAR_DATA:
         org $A6D0,0
 
 CODE_SEGMENT_2:
-        include "DTScreen.a"
-        include "DTText.a"
-        include "DTGraphics.a"
-        include "DTMenu.a"
-        include "DTUtil.a"
-        include "DTGame.a"
-        include "DTObjects.a"
+        include "irq.a"
+        include "screen.a"
+        include "text.a"
+        include "graphics.a"
+        include "menu.a"
+        include "util.a"
+        include "game.a"
+        include "objects.a"
         ;; information for sprite sequences, x offsets
-        include "DTSpriteInfo.a"
+        include "sprite_info.a"
 
         ;include "system.a"
 
