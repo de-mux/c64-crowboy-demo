@@ -129,7 +129,7 @@
 	sta NextLevel+1
 	ENDM
 
-; SCREEN SHIT _______________________________
+; SCREEN _______________________________
         ; set interrupt vector
         ; NOTE: interrupts should be disabled before calling this
 	MAC set_interrupt

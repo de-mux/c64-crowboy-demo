@@ -132,26 +132,6 @@ _GetCurrentVICMemMSB     subroutine
         rts
 
 
-;; *******************  _GetCurrentCharsetMSB *******************
-;;
-;; Returns:
-;;       .A : the MSB of the currently selected character set address
-;_GetCurrentCharsetMSB   subroutine
-;.vic_mem_msb = temp_b
-;
-;        jsr _GetCurrentCharsetMSB
-;        sta .vic_mem_msb
-;
-;        lda VICMEM
-;        and #VICMEM_CHARSET_ADDR_SELECT_MASK
-;
-;        ; add VIC-II MSB to character set MSB
-;        clc
-;        adc .vic_mem_msb
-;        sta onscreen_char_msb
-;        rts
-
-
 ; ******************* ClearOffscreen *******************
 ;
 ; Purpose:              Clear the current screen

@@ -148,9 +148,11 @@ DrawLevelToOffscreen    subroutine
 
 RequestWorldScreenUpdate  subroutine
         ; setup next interrupt for a screen update
+        cli
         lda #IRQ_SCREEN_UPDATE_COMPARE
         sta RASTER_COMPARE
         set_interrupt Int_WorldScreenUpdate
+        sei
         rts
 
 
