@@ -58,31 +58,6 @@ InitGameGraphics        subroutine
         rts
 
 
-; ******************* Int_ScreenFade *******************
-;
-; Purpose:              Interrupt routine to fade the screen out
-;
-; Registers used:       .A, .X, .Y
-;
-; How to use:
-;       set_interrupt Int_ScreenFade
-;
-;Int_ScreenFade      subroutine
-;        ldy fade_mode
-;        beq .rts
-;        dey
-;        beq .2
-;        jsr FadeScreenOut
-;        jmp .1
-;.2      jsr FadeScreenIn
-;.1      dec fade_value
-;        bne .rts
-;.fade_complete:
-;        lda #FADE_MODE_NONE
-;        sta fade_mode
-;.rts    rts
-
-
 ; ******************* DrawLevelToOffscreen *******************
 ;
 ; Purpose:              Draw 40x18 view of the current level to offscreen area
@@ -175,7 +150,7 @@ RequestWorldScreenUpdate  subroutine
         ; setup next interrupt for a screen update
         lda #IRQ_SCREEN_UPDATE_COMPARE
         sta RASTER_COMPARE
-        set_interrupt #Int_WorldScreenUpdate
+        set_interrupt Int_WorldScreenUpdate
         rts
 
 
@@ -242,7 +217,7 @@ Int_WorldScreenUpdate    subroutine
         ; set interrupt back to Int_ModeJump
         lda #IRQ_MODE_JUMP_COMPARE
         sta RASTER_COMPARE
-        set_interrupt #Int_ModeJump
+        set_interrupt Int_ModeJump
 
         jmp ModeExit
 

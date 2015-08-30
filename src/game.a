@@ -30,12 +30,19 @@ _GAME_MODE_FADE_OUT                 EQU 9
 ; Prerequisites:
 ;       Make sure IRQ has been set up.
 ;
-NewGame         subroutine
+QueueFadeOutToNewGame   subroutine
         lda #_GAME_MODE_NEW_GAME
         jsr SetMode
-        set_interrupt #Int_ModeJump
-        rts
 
+        ldx #<Int_ModeJump
+        ldy #>Int_ModeJump
+        lda #IRQ_MODE_JUMP_COMPARE
+        jsr QueueNextInterrupt
+
+        lda #FADE_MODE_OUT
+        jsr SetInterruptFade
+
+        rts
 
 ; ******************* SetMode *******************
 ;
@@ -53,7 +60,7 @@ SetMode subroutine
         rts
 
 
-; Function Name:        Int_ModeJump
+; ******************* Int_ModeJump *******************
 ;
 ; Purpose:              Determine what mode the game is in
 ;                               and jump to appropriate subroutine.
@@ -78,10 +85,8 @@ Int_ModeJump        subroutine
         ;jmp ModeExit
 
         ; setup next interrupt for game update
-.1      lda #>(ModeExit-1)      ; setup RTS to jump to ModeExit
-        pha
-        lda #<(ModeExit-1)
-        pha
+.1:
+        set_rts_vector ModeExit
 
         ; mode jump table
         lda mode

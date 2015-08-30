@@ -43,25 +43,23 @@ CHARSET_2_BANK_SELECT_BITS = CHARSET_2_START_LOC / $400
         org $02
 ZeroPage:
 
+; Timing
+frame_toggle    DC.B 0  ; toggles between 0/1 every IRQ, useful for when IRQ routine
+                        ; takes longer than screen refresh cycle
+
+; Interrupts
+; used to store the address of the next interrupt routine to enable after
+;  the current interrupt has completed its task
+v_next_interrupt        DC.W 0
+next_irq_compare        DC.B 0  ; Next interrupt scanline number
+
 ; Int_MainMenu
 menu_mode       DC.B 0  ; what mode the menu is in
 menu_next_mode  DC.B 0  ; store the value of the mode to set after fadeout
 
-; Timing
-frame_toggle    DC.B 0  ; toggles between 0/1 every IRQ, useful for when IRQ routine
-                        ; takes longer than screen refresh cycle
-v_program_loop_interrupt DC.W 0 ; Vector: where screenupdate will set the next interrupt
-next_irq_compare DC.B 0  ; Next interrupt scanline number
-
 ; Int_WorldScreenUpdate
 rough_scroll    DC.B 0  ; current level rough scroll pos(upper-left lo-byte)
 fine_scroll     DC.B 0  ; smooth X scroll
-screen_page     DC.B 0  ; what page we're on (0 or 1)
-onscreen_char_msb DC.B 0 ; the actual MSB of the current screen char memory
-offscreen_char_msb:
-offscreen_color_mem2_msb:
-                 DC.B 0 ; the actual MSB of the offscreen screen char memory
-                        ;  doubles as a 2nd offscreen work area for color memory
 
 ; Screen
 screen_update_flag DC.B 0 ; 1 means screen needs updating
@@ -70,6 +68,9 @@ cursor_pos      DC.W 0  ; position of cursor in screen memory
 color_pos       DC.W 0  ; corresponding color location for cursor
 fade_mode       DC.B 0  ; indicates if the screen is not fading, fading in, fading out
 fade_table_index      DC.B 0  ; current fade index for screen(relative to beginning of fade table)
+screen_page     DC.B 0  ; what page we're on (0 or 1)
+onscreen_char_msb DC.B 0 ; the actual MSB of the current screen char memory
+offscreen_char_msb DC.B 0 ; the actual MSB of the offscreen screen char memory
 
 ; General
 temp_w          DC.W 0  ; temporary area for storing word addresses
@@ -150,28 +151,6 @@ Start:  sei
 
         jsr InitScreen
 
-        ; do screen fade out
-        lda #5
-.fader  pha
-        jsr FadeScreenOut
-        ldx #5    ; wait time between fade
-        jsr Wait
-        pla
-        sec
-        sbc #1
-        bne .fader
-
-        jsr ClearCurrentScreen         ;clear screen
-        spr_disable_all         ;turn off all sprites
-        ; set VIC-II bank
-        lda CIA2
-        and #%11111100
-        ora #VIC_BANK_SELECT_BITS
-        sta CIA2
-        ; set screen memory and character memory banks
-        lda #(SCREEN_1_BANK_SELECT_BITS + CHARSET_2_BANK_SELECT_BITS)
-        sta VICMEM
-
         IFNCONST DEBUG_DISABLE_LOGO
         jsr C64LOGO             ; show C64 Logo
         ENDIF
@@ -180,11 +159,8 @@ Start:  sei
         ; setup IRQ interrupt. The rest of code execution happens
         ;  through interrupts.
         jsr InitIRQ
-        ; point interrupt to main menu routine
+        ; point interrupt to main menu routine and enable interrupts
         jsr DoExitToMainMenu
-
-        ; enable interrupt
-        cli
 
         ; loop infinitely until program has been reset
 .loop   lda reset_flag

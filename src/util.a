@@ -11,10 +11,10 @@
 ;
 ; Purpose:              Pause program execution
 ;
-; Registers used:       rA, rX, rY
+; Registers used:       .A, .X, .Y
 ;
 ; How to use:
-;       Load rX with desired wait time.
+;       Load .X with desired wait time.
 ;       Note: Not recommended to be used inside an IRQ interrupt.
 ;
 Wait    subroutine
@@ -62,4 +62,31 @@ ReadJoy subroutine
         INX
 .R3     LSR
         RTS
+
+
+; ******************* CopyBlocks *******************
+;
+; Purpose:              Copy one or more blocks from one area of memory to another.
+;
+; Input:
+;       .A : the MSB of the source address
+;       .Y : the MSB of the destination address
+;       .X : the number of blocks to copy
+;
+CopyBlocks      subroutine
+        ; (self-modifying code) setup base addresses for source and dest
+        sta .src+2
+        sty .dst+2
+
+        ldy #0
+.byte:
+.src    lda $F000,y
+.dst    sta $F000,y
+        dey
+        bne .byte
+        inc .src+2
+        inc .dst+2
+        dex
+        bne .byte
+        rts
 

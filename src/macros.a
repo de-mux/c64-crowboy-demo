@@ -133,11 +133,28 @@
         ; set interrupt vector
         ; NOTE: interrupts should be disabled before calling this
 	MAC set_interrupt
-	lda <{1}
+	lda #<{1}
 	sta SOFT_INTERRUPT_VECT
-	lda >{1}
+	lda #>{1}
 	sta SOFT_INTERRUPT_VECT + 1
 	ENDM
+
+        ; set interrupt vector indirectly
+        ; NOTE: interrupts should be disabled before calling this
+	MAC set_interrupt_indirect
+	lda {1}
+	sta SOFT_INTERRUPT_VECT
+	lda {1} + 1
+	sta SOFT_INTERRUPT_VECT + 1
+	ENDM
+
+        ; push an address to the stack so that the next RTS will jump to it
+        MAC set_rts_vector
+        lda #>[{1} - 1]
+        pha
+        lda #<[{1} - 1]
+        pha
+        ENDM
 	
 	MAC set_interrupt_buf
 	lda <{1}

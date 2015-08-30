@@ -6,7 +6,7 @@
 ; Contains : IRQ handling routines
 ;
 
-; Function Name:        InitIRQ
+; ******************* InitIRQ *******************
 ;
 ; Purpose:              Setup main IRQ Mode Jump
 ;                               and enable interrupts.
@@ -56,7 +56,7 @@ InitIRQ subroutine
 ;.vectors       DC.W $EA31, $FE66, $FE47
 
 
-; Function Name:        IRQEnter
+; ******************* IRQEnter *******************
 ;
 ; Purpose:              push registers on stack, then jump to interrupt
 ;                               vector at SOFT_INTERRUPT_VECT
@@ -101,6 +101,47 @@ IRQExit         subroutine
         tax
         pla
         rti
+
+
+; ******************* QueueNextInterrupt *******************
+;
+; Purpose:              Store an interrupt vector and raster compare line to be
+;                               switched to using NextInterrupt. The typical use
+;                               of this is for setting up the next interrupt
+;                               routine that will be switched to once the current
+;                               interrupt routine has finished its task(for
+;                               example a screen fade).
+;
+; How to use:
+;       Call this routine to set the interrupt that will be enabled.
+;       In the current interrupt, write some logic that will call NextInterrupt
+;               when ready to switch.
+;
+; Registers:
+;       .X/.Y : the LSB and MSB of the next interrupt vector
+;       .A : the 8-bit raster compare line for the next interrupt
+QueueNextInterrupt      subroutine
+        stx v_next_interrupt
+        sty v_next_interrupt+1
+        sta next_irq_compare
+        rts
+
+; ******************* NextInterrupt *******************
+;
+; Purpose:              Set up SOFT_INTERRUPT_VECT and raster compare line
+;                               for the next interrupt routine
+;
+; Prerequisites:
+;       Call QueueNextInterrupt
+;
+NextInterrupt   subroutine
+        sei
+        set_interrupt_indirect v_next_interrupt
+        lda next_irq_compare
+        sta RASTER_COMPARE
+        cli
+        rts
+
 
 BRKVector       subroutine
         lda #1

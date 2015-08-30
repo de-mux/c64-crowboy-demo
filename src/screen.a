@@ -6,40 +6,151 @@
 ; Contains : General Screen subroutines
 ;
 
+; offscreen char mem doubles as a 2nd offscreen work area for color memory
+;  used for storing target colors for fades
+offscreen_color_mem2_msb = offscreen_char_msb
+
 ; ******************* InitScreen *******************
 ;
 ; Purpose:              Must be called before any other screen routine.
-;                       Initializes screen variables.
+;                       Initializes screen variables, sets VIC-II bank.
 ;
 InitScreen      subroutine
-        jsr UpdateOnscreenCharMSB
-        cmp #>Screen2
-        ; set offscreen memory area MSB
-        ; make sure it's not the current screen
-        bne .1
-        lda #>Screen1
-        jmp .2
-.1      lda #>Screen2
-.2      sta offscreen_char_msb
+; choose an alternative character memory bank in the VIC-II default bank
+; This is used for fading out the screen when the game is first loaded
+.VIC_ALT_CHAR_MEM = ((CurLevel + $3FF) / $400) * $400
+        IF .VIC_ALT_CHAR_MEM > CIA2_VIC_DEFAULT_BANK * $4000 + $3C00 || .VIC_ALT_CHAR_MEM < CIA2_VIC_DEFAULT_BANK * $4000
+        ERR
+        ENDIF
+.VIC_ALT_CHARMEM_SELECT_BITS = .VIC_ALT_CHAR_MEM / $40
+
+        ; copy current screen to alternate char mem area and switch to it
+        jsr _UpdateOnscreenCharMSB
+        ldy #>.VIC_ALT_CHAR_MEM
+        jsr _CopyScreenArea
+
+        ; set character memory to alternate location
+        lda VICMEM
+        and #~VICMEM_VIDEO_ADDR_SELECT_MASK
+        ora #.VIC_ALT_CHARMEM_SELECT_BITS
+        sta VICMEM
+
+        jsr _InitOffscreenCharAndColorBuffers
+
+        ; copy color mem to offscreen to prepare for fadeout
+        ldy #>offscreen_color_mem
+        jsr _CopyColorMem
+
+        lda #FADE_MODE_OUT
+        jsr _FadeStart
+
+; fade screen out
+.fader:
+        ldx #5    ; wait time between fade
+        jsr Wait
+        ;jsr FadeScreenOut
+        ldx #_SCREEN_COPY_FULLSCREEN
+        jsr CopyOffscreenColorToColorMem
+        jsr _FadeOffscreenOut
+        bne .fader
+
+        ; set to Screen1
+        lda #0
+        jsr SetPage
+
+        ; set VIC-II bank(16kB bank)
+        lda CIA2
+        and #~CIA2_VIC_SELECT_MASK
+        ora #VIC_BANK_SELECT_BITS
+        sta CIA2
+
+        spr_disable_all         ;turn off all sprites
+
+        ; select a charset
+        lda VICMEM
+        and #~VICMEM_CHARSET_ADDR_SELECT_MASK
+        ora #CHARSET_2_BANK_SELECT_BITS
+        sta VICMEM
         rts
 
+_InitOffscreenCharAndColorBuffers       subroutine
+        jsr _UpdateOnscreenCharMSB
+        ; set onscreen/offscreen memory locations and
+        ; copy current char mem to Screen1 char mem
+        ; (.A is the current onscreen char memory MSB)
+        ldx #>Screen2
+        stx offscreen_char_msb
+        ldy #>Screen1
+        sty onscreen_char_msb
+        jsr _CopyScreenArea
+        rts
 
-; ******************* UpdateOnscreenCharMSB *******************
+; ******************* _UpdateOnscreenCharMSB *******************
 ;
 ; Purpose:              Determines the current screen and updates
 ;                         onscreen_char_msb
 ;
 ; Returns:
 ;       .A : the MSB of the current onscreen character memory
-UpdateOnscreenCharMSB subroutine
+_UpdateOnscreenCharMSB subroutine
+.vic_mem_msb = temp_b
+
+        jsr _GetCurrentVICMemMSB
+        sta .vic_mem_msb
+
         lda VICMEM      ; what screen are we on?
         and #%11110000
         lsr
         lsr
+
+        ; add VIC-II MSB to character MSB
         clc
-        adc #>VIC_BANK_START_LOC
+        adc .vic_mem_msb
         sta onscreen_char_msb
         rts
+
+
+; *******************  _GetCurrentVICMemMSB *******************
+;
+; Returns:
+;       .A : the MSB of the currently selected 16kB VIC-II bank($00, $40, $80, $C0)
+_GetCurrentVICMemMSB     subroutine
+.cia2_vic_select_bits = temp_b
+
+        lda CIA2
+        and #CIA2_VIC_SELECT_MASK
+        sta .cia2_vic_select_bits
+        ; convert select bits into VIC-II bank #
+        lda #3
+        sec
+        sbc .cia2_vic_select_bits
+        ; multiply by 64 to get the MSB of VIC-II memory
+        clc
+        ror
+        ror
+        ror
+        rts
+
+
+;; *******************  _GetCurrentCharsetMSB *******************
+;;
+;; Returns:
+;;       .A : the MSB of the currently selected character set address
+;_GetCurrentCharsetMSB   subroutine
+;.vic_mem_msb = temp_b
+;
+;        jsr _GetCurrentCharsetMSB
+;        sta .vic_mem_msb
+;
+;        lda VICMEM
+;        and #VICMEM_CHARSET_ADDR_SELECT_MASK
+;
+;        ; add VIC-II MSB to character set MSB
+;        clc
+;        adc .vic_mem_msb
+;        sta onscreen_char_msb
+;        rts
+
 
 ; ******************* ClearOffscreen *******************
 ;
@@ -54,7 +165,7 @@ ClearOffscreen  subroutine
 ; Purpose:              Clear the current screen
 ;
 ClearCurrentScreen  subroutine
-        jsr UpdateOnscreenCharMSB  ; get MSB of current screen (in .A)
+        jsr _UpdateOnscreenCharMSB  ; get MSB of current screen (in .A)
 ; fallthrough intentional
 ; ******************* ClearScreen *******************
 ;
@@ -62,7 +173,7 @@ ClearCurrentScreen  subroutine
 ;
 ; Registers used:       .A, .X
 ;
-; Arguments:
+; Input:
 ;       .A: MSB of screen memory to clear(for example, $04 to clear $0400-$07E8)
 ;
 ClearScreen     subroutine
@@ -174,7 +285,7 @@ ClearColors     subroutine
 ;
 ; Memory used:          cursor_pos (ZP)
 ;
-; Arguments:
+; Input:
 ;       .X: row of desired position
 ;       .Y: column of desired position
 ;
@@ -348,21 +459,56 @@ PageFlip        subroutine
         jmp SetPage
 
 
-; ******************* _CopyOffscreenColorToColorMem2 *******************
+; ******************* SetInterruptFade *******************
 ;
-; Purpose:              Copy offscreen color memory buffer to 2nd offscreen
-;                               color memory buffer. This is used to store target
-;                               colors for screen fades.
+; Set the next interrupt to fade the screen in or out
 ;
-_CopyOffscreenColorToColorMem2    subroutine
-        ; Copy offscreen color info to onscreen color memory(world viewport only)
-        ;   this must be split up due to 6502 restriction on branch ranges
-        ldx #>offscreen_color_mem
-        ldy offscreen_color_mem2_msb
-        jsr CopyScreenArea
+; Prerequisites:
+;       Call QueueNextInterrupt to set the interupt vector and raster compare line
+;               of the interrupt to enable after the fade has completed
+;
+;       For fade out, make sure that the data in offscreen_color_mem
+;               reflects the colors currently onscreen
+;       For a fade in, make sure that the data in offscreen_color_mem
+;               reflects what colors to fade in to
+;       Load .A with the fade mode (FADE_MODE_IN, FADE_MODE_OUT)
+;
+SetInterruptFade     subroutine
+        sei
+        jsr _FadeStart
+        set_interrupt _Int_ScreenFade
+        cli
         rts
 
-; ******************* FadeStart *******************
+
+; ******************* _Int_ScreenFade *******************
+;
+; Purpose:              Interrupt routine to fade the screen
+;
+; How to use:
+;       Set the fade_mode
+;       set_interrupt _Int_ScreenFade
+;
+_Int_ScreenFade         subroutine
+        ldx #_SCREEN_COPY_FULLSCREEN
+        jsr CopyOffscreenColorToColorMem
+
+        lda fade_mode
+        cmp #FADE_MODE_OUT
+        bne .1
+        jsr _FadeOffscreenOut
+        jmp .3
+.1      jsr _FadeOffscreenIn
+.3:
+        cmp #0
+        ; enable next interrupt if fade is finished
+        bne .2
+        jsr NextInterrupt
+.2:
+        jmp IRQExit
+
+
+; ******************* _FadeStart *******************
 ;
 ; Purpose:              Begin fade process
 ;
@@ -373,14 +519,18 @@ _CopyOffscreenColorToColorMem2    subroutine
 ;               reflects the colors currently onscreen
 ;       For a fade in, make sure that the data in offscreen_color_mem
 ;               reflects what colors to fade in to
-;       Load .A with the fade mode (FADE_MODE_IN, FADE_MODE_OUT)
 ;
 ;       NOTE: don't do any page flipping or writing to offscreen memory
 ;               while the screen is fading
-FadeStart       subroutine
+; Input:
+;       .A : fade mode (FADE_MODE_IN, FADE_MODE_OUT)
+;
+_FadeStart       subroutine
+        sta fade_mode
         cmp #FADE_MODE_IN
         beq .1
         ; fade out (start at last fade table entry)
+        ; TODO: make copying to color mem2 a prerequisite instead of doing it here?
         jsr _CopyOffscreenColorToColorMem2
         lda #<COLOR_FADE_TABLE_LAST
         jmp .2
@@ -395,81 +545,40 @@ FadeStart       subroutine
         sta fade_table_index
         rts
 
-; ******************* FadeScreenOut *******************
-;
-; Purpose:              Fade the screen out
-;
-; Registers used:       .A, .X, .Y
-;
-; How to use:
-;       Each time you call this routine the entire screen gets a shade darker.
-;
-FadeScreenOut      subroutine
-        ; cycles: 20403 (20.4 ms)
-        lda BORDER_COLOR
-        and #%00001111
-        tax
-        lda COLOR_FADE_TABLE,x
-        sta BORDER_COLOR
-        lda BG0_COLOR
-        and #%00001111
-        tax
-        lda COLOR_FADE_TABLE,x
-        sta BG0_COLOR
-        ldy #0          ; fade screen chars
 
-        ldy #250        ; 4 250-byte chunks
-.1:
-CHUNK   SET     0
-        REPEAT 4
-        lda COLORMEM + (250 * CHUNK) - 1,y
-        and #%00001111
-        tax
-        lda COLOR_FADE_TABLE,x
-        sta COLORMEM + (250 * CHUNK) - 1,y
-CHUNK   SET     CHUNK + 1
-        REPEND
-        dey
-        bne .1
-        rts
-
-; ******************* FadeOffscreenIn *******************
+; ******************* _FadeOffscreenIn *******************
 ; Purpose:              Fade screen one shade lighter
 ;
 ; Usage:
-;       Before calling this routine, call FadeStart
+;       Before calling this routine, call _FadeStart
 ;       Call this routine every frame to fade the screen one shade lighter
 ;
 ; Returns:
 ;       .A : 0 if fade has completed, 1 if fade has not yet completed
 ;
-FadeOffscreenIn         subroutine
+_FadeOffscreenIn         subroutine
         lda fade_table_index
-;        cmp #<COLOR_FADE_TABLE_0
-;        bne .1
-;        ; if we're at the beginning of the fade, 
-;.1:
         cmp #<COLOR_FADE_TABLE_LAST
         beq .fade_complete
 
         clc
         adc #COLOR_FADE_TABLE_ROW_LENGTH
         sta fade_table_index
+
         jsr _UpdateOffscreenFade
         jmp .fade_not_complete
 ; fallthrough intentional
-; TODO: combine this with FadeScreenOut
-; ******************* FadeOffscreenOut *******************
+; ******************* _FadeOffscreenOut *******************
 ; Purpose:              Fade screen one shade darker
 ;
 ; Usage:
-;       Before calling this routine, call FadeStart
+;       Before calling this routine, call _FadeStart
 ;       Call this routine every frame to fade the screen one shade darker
 ;
 ; Returns:
 ;       .A : 0 if fade has completed, 1 if fade has not yet completed
 ;
-FadeOffscreenOut
+_FadeOffscreenOut
         lda fade_table_index
         IF <COLOR_FADE_TABLE_0 != 0
         cmp #<COLOR_FADE_TABLE_0
@@ -479,6 +588,7 @@ FadeOffscreenOut
         sec
         sbc #COLOR_FADE_TABLE_ROW_LENGTH
         sta fade_table_index
+
         jsr _UpdateOffscreenFade
 
 .fade_not_complete:
@@ -525,7 +635,7 @@ _UpdateOffscreenFade      subroutine
         rts
 
 
-; ******************* CopyScreenArea *******************
+; ******************* _CopyScreenArea *******************
 ;
 ; Purpose:              Copy a chunk of screen(char or color) to another
 ;                               area in memory. If the source address is the
@@ -534,35 +644,29 @@ _UpdateOffscreenFade      subroutine
 ;                               destination, and sprite and background colors are
 ;                               copied as well.
 ; Input:
-;       .X : the MSB of the source chunk
-;       .Y : the MSB of the destination memory
+;       .A : the MSB of the source start address
+;       .Y : the MSB of the destination start address
 ;
-CopyScreenArea      subroutine
-        ; if source is VIC-II color memory, we need to mask off the low-nibble of
-        ;  each byte before storing
-        cpx #>COLORMEM
-        beq .src_is_colormem
-
-        ; (self-modifying code) setup base addresses for source and dest
-        stx .src+2
-        sty .dst+2
-
+_CopyScreenArea      subroutine
         ldx #[SCREEN_MEMORY_SIZE / CPU_PAGE_SIZE]
-        ldy #0
-.byte:
-.src    lda $F000,y
-.dst    sta $F000,y
-        dey
-        bne .byte
-        inc .src+2
-        inc .dst+2
-        dex
-        bne .byte
+        jsr CopyBlocks
+
         rts
 
-.src_is_colormem:
+
+; ******************* _CopyColorMem *******************
+;
+; Purpose:              Copy a chunk of VIC-II color memory to an offscreen area.
+;                               The low-nibble of each byte is masked before writing to
+;                               destination, and sprite and background colors are
+;                               copied as well.
+; Input:
+;       .Y : the MSB of the destination memory
+;
+_CopyColorMem    subroutine
         ; (self-modifying code) setup base addresses for source and dest
-        stx .src2+2
+        lda #>COLORMEM
+        sta .src2+2
         sty .dst2+2
         iny
         iny
@@ -572,7 +676,7 @@ CopyScreenArea      subroutine
         ldx #[SCREEN_MEMORY_SIZE / CPU_PAGE_SIZE]
         ldy #0
 .byte2:
-.src2   lda $F000,y
+.src2   lda COLORMEM,y
         and #$0F
 .dst2   sta $F000,y
         dey
@@ -593,8 +697,15 @@ CopyScreenArea      subroutine
         rts
 
 
-;PrepareNextInterrupt   subroutine
-;       set_interrupt v_program_loop_interrupt
-;       lda next_irq_compare
-;       sta $D012
-;       rts
+; ******************* _CopyOffscreenColorToColorMem2 *******************
+;
+; Purpose:              Copy offscreen color memory buffer to 2nd offscreen
+;                               color memory buffer. This is used to store target
+;                               colors for screen fades.
+;
+_CopyOffscreenColorToColorMem2    subroutine
+        lda #>offscreen_color_mem
+        ldy offscreen_color_mem2_msb
+        jsr _CopyScreenArea
+        rts
+

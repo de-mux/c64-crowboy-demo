@@ -50,7 +50,11 @@ VIC        = $D000
 SID        = $D400
 COLORMEM   = $D800
 CIA1       = $DC00
+; CIA2 data port register A(VIC-II bank, RS-232/serial)
 CIA2       = $DD00
+CIA2_VIC_SELECT_MASK = %00000011
+CIA2_VIC_DEFAULT_BANK = 0
+
 KERNALROM  = $E000
 
 ; Sprites
@@ -81,6 +85,9 @@ SPRDISP    = $D015  ;sprites 0-7 display enable (1=enable)
 VIC2       = $D016  ;VIC control register (Multi-color, 38/40 column, smooth scroll X pos)
 SPRV       = $D017  ;sprites 0-7 expand vertical
 VICMEM     = $D018  ;VIC memory control (video matrix address, charset address)
+VICMEM_VIDEO_ADDR_SELECT_MASK = %11110000
+VICMEM_CHARSET_ADDR_SELECT_MASK = %00001110
+
 VICINT     = $D019  ;VIC interrupt(IRQ, Sprite collisions)
 IRQMASK    = $D01A
 PRIORITY   = $D01B ;sprite/background priority
