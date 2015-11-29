@@ -1,85 +1,64 @@
 ;Guide to Sprites:
 ;Sprite #	Description		Next Sprite In Sequence
 ;83		Ping Stand		83
-;84
 ;85		Ping begin run		87
-;86
-;87-101		Ping run		Loop
-;88-102
+;87-101		Ping run		87(Loop)
+;103            Ping begin jump         104
+;105            Ping jump               104
 
 
-; This array describes the next sprite in sequence for a given sprite, starting
+; The values in the tables below represent sprite indices.
+;       Each pair of bytes represents the right-facing and left-facing version
+;       of a frame of animation.
+;       Right comes first, left comes second. Only the first byte of each pair
+;	is actually looked up by the program. The second byte in this array is never
+;	looked up, but is a placeholder so sprites may be looked
+;	up quickly. The left-facing sprite index is calculated by adding 1 to the
+;       right-facing sprite index.
+
+; This array describes the next sprite in sequence for each sprite index, starting
 ;	at sprite 83($53 HEX).
-; The bytes that are paired mean the object is flippable. Facing right comes
-;	first, facing left comes second. Only the first byte of each pair
-;	is looked up by the program. The second byte in this array is never
-;	looked up by the program, but is a placeholder so sprites may be looked
-;	up more quickly. When the program updates the VIC's sprite data
-;	pointers, it checks which way the sprites are "facing", and adds 1 to
-;	the pointer if the sprite is facing left.
-;	(if the 2nd bytes were filled in, they'd all equal the
-;		1st byte's value + 1)
+; Note that when adding new sprite frames to this array, the corresponding offset
+;       should be added to SpriteOffset.
 SpriteSequence = . - 83 ; (so SpriteSequence can be indexed starting at 83)
-	; Ping standing -> Ping standing
-	DC.B $53, 0
-	; Ping begin run -> Ping run
-	DC.B $57, 0
+	; Ping standing
+	DC.B 83,  84    ; 83 STAND-RT.SPR, STAND-LT.SPR
+	; Ping begin run(85) -> run(87)
+	DC.B 87,  88    ; 85 RUN-RT.SPR, RUN-LT.SPR
 	; Ping running loop
-	DC.B $59, 0
-	DC.B $5B, 0
-	DC.B $5D, 0
-	DC.B $5F, 0
-	DC.B $61, 0
-	DC.B $63, 0
-	DC.B $65, 0
-	DC.B $57, 0
+	DC.B 89,  90    ; 87
+	DC.B 91,  92    ; 89
+	DC.B 93,  94    ; 91
+	DC.B 95,  96    ; 93
+	DC.B 97,  98    ; 95
+	DC.B 99,  100   ; 97
+	DC.B 101, 102   ; 99
+	DC.B 87,  88    ; 101
+        ; Ping begin jump(103) -> jump(105)
+        DC.B 105, 106   ; 103
+        DC.B 105, 106   ; 105
 	
 
-	if 0	
-; Each byte of this array holds info for each sprite data block.
-;	Bits 0-3: X Offset (0 = use object accel/vel)
-;	Bits 4-7: # of frames to hold
-; (See note about flippable objects above for more info)
-SpriteInfo = . - 83
-	; Ping standing
-	DC.B 1*16 + 0, 1*16 + 0		; use object accel, hold 1 frame
-	; Ping begin run
-	DC.B 1*16 + 0, 1*16 + 0
-	; Ping running loop
-	DC.B 1*16 + 4, 1*16 + 4
-	DC.B 1*16 + 6, 1*16 + 6
-	;DC.B 1*16 + ?, 0
-	;DC.B 1*16 + ?, 0
-	DC.B 1*16 + 6, 1*16 + 6		; airborn
-	DC.B 1*16 + 6, 1*16 + 6		; airborn
-	DC.B 1*16 + 4, 1*16 + 4
-	DC.B 1*16 + 6, 1*16 + 6
-	;DC.B 1*16 + ?, 0
-	;DC.B 1*16 + ?, 0
-	DC.B 1*16 + 6, 1*16 + 6		; airborn
-	DC.B 1*16 + 6, 1*16 + 6		; airborn
-	endif
-
-
-; Each byte of this array holds X Offset for sprite data block
-; (See note about flippable objects above for more info)
+; Each pair of bytes in this array holds the X Offsets for the right-facing
+;       and left-facing sprites of a single frame of animation.
 SpriteOffset = . - 83
+        ;                       ; SPRITE INDEX
+        ;                       ; ------------
 	; Ping standing
-	DC.B 0,0		; use object accel, hold 1 frame
+	DC.B 0,0                ; 83
 	; Ping begin run
-	DC.B 0,0
+	DC.B 0,0                ; 85
 	; Ping running loop
-	DC.B 4,-4
-	DC.B 6,-6
-	;DC.B 1*16 + ?, 0
-	;DC.B 1*16 + ?, 0
-	DC.B 6,-6			; airborn
-	DC.B 6,-6			; airborn
-	DC.B 4,-4
-	DC.B 6,-6
-	;DC.B 1*16 + ?, 0
-	;DC.B 1*16 + ?, 0
-	DC.B 6,-6			; airborn
-	DC.B 6,-6			; airborn
-	
+	DC.B 4,-4               ; 87
+	DC.B 6,-6               ; 89
+	DC.B 6,-6		; 91  airborn
+	DC.B 6,-6               ; 93  airborn
+	DC.B 4,-4               ; 95
+	DC.B 6,-6               ; 97
+	DC.B 6,-6		; 99  airborn
+	DC.B 6,-6		; 101 airborn
+        ; Ping starting to jump
+        DC.B 0,0                ; 103
+        ; Ping jumping
+        DC.B 5,-5               ; 105
 	

@@ -275,69 +275,111 @@ DoSetupLevel    subroutine
         rts
 
 
+
 ;flipbit DC.B 0
 DoWorldUpdate   subroutine
-        ; read user input and take action
+        ; read user input and request action
         jsr ReadJoy
+        jsr PlayerHandleJoystick
+        jsr SpritesUpdatePosition
+        jsr SpriteAnimationNextFrame
+
+        ; scroll screen based on player(sprite 0)'s X position
+        lda #0
+        jsr ScreenScroll
+
+        ; TODO: this only needs to happen if rough scroll has changed
+        jsr DrawLevelToOffscreen
+
+        ;lda #1                 ; tell screenUpdate to update screen
+        ;sta ScreenNeedsUpdating
+        jsr RequestWorldScreenUpdate
+
+        rts
+
+
+; ******************* PlayerHandleJoystick *******************
+;
+; Purpose:              request action(s) based on state of joystick
+;
+; Input:        .X              X direction(1, 0 or -1)
+;               .Y              Y direction(1, 0 or -1)
+;               carry bit       set=fire pressed, clear=fire not pressed
+; How to use:
+;       Call ReadJoy and then call this routine.
+;
+PlayerHandleJoystick    subroutine
+.fire = temp_b
+.y = temp_b2
         ; store fire button value and y value for later
         lda #0
         bcs .nf                 ;
         lda #1                  ;
 .nf     sta .fire               ; 0 or 1
         sty .y
-        ;stx temp_w3
         cpx #0
         bpl .1
-        ;ldx #0                 ; if X = -1, run left
-        lda #run
-        ldy #left
-        ;jsr RequestAction
-        jmp .3                  ; else
+        lda #ACT_RUN            ; if X = -1, run left
+        ldy #OBJ_INFO_FACING_LFT
+        jmp .req_act
 .1      beq .2
-        ;ldx #0                 ; if X = 1, run right
-        lda #run
-        ldy #right
-        ;jsr RequestAction
-        jmp .3                  ; else
-.2      ;ldx #0                 ; stand
-        lda #stand
-        ;jsr RequestAction
-
-.3      ldx #0
+        lda #ACT_RUN            ; if X = 1, run right
+        ldy #OBJ_INFO_FACING_RT
+        jmp .req_act
+.2      lda #ACT_STAND          ; otherwise, stand
+.req_act:
+        ldx #0
         jsr RequestAction
+
         ldy .y                  ; if Y = -1
         bpl .4
         ldx #0                  ; jump
-        lda #jump
+        lda #ACT_JUMP
         jsr RequestAction
-
-.4      lda .fire               ; if (fire) then attack
+.4:
+        lda .fire               ; if (fire) then attack
         beq .5
         ldx #0
-        lda #attack
+        lda #ACT_ATTACK
         jsr RequestAction
         jmp .5
-.fire   dc.b 0
-.y      dc.b 0
 
-.5:
-        ; update sprite data pointers from animation sequences
-        subroutine
-        ldx #0
+.5:     rts
+
+
+; ******************* SpriteAnimationNextFrame *******************
+;
+; Purpose:      advance all sprite animations by one frame
+;
+; Input:        None
+;
+; TODO: currently only does sprite 0(player sprite). Needs to be fixed when
+;       more sprites are added
+SpriteAnimationNextFrame subroutine
+        ldx #0                  ; player sprite
         lda S_spriteDataPtr,x   ; .Y = sprite #
         tay
         lda SpriteSequence,y
         sta S_spriteDataPtr,x
+        rts
 
-        ; update sprite position from velocity
-        lda o_info,x            ; carry = facing bit
+
+; ******************* SpritesUpdatePosition *******************
+;
+; Purpose:      update sprite position from velocity
+;
+; Input:        None
+SpritesUpdatePosition   subroutine
+        ldx #0
+        ldy S_spriteDataPtr,x
+        lda obj_info,x          ; carry = facing bit
         lsr
         lsr
         bcc .1                  ; if facing left, iny
         iny
 .1      lda SpriteOffset,y      ; temp_w = SpriteOffset[y]
         bne .2
-        lda o_velX,x            ; if 0, temp = o_velX[x]
+        lda obj_vel_x,x         ; if 0, temp = obj_vel_x[x]
 .2      sta temp_w
         txa
         tay                     ; y = object #
@@ -350,7 +392,7 @@ DoWorldUpdate   subroutine
         inx                     ; add sprite vel to current Y position
         lda S_XYPos,x
         sta temp_w
-        lda o_velY,y
+        lda obj_vel_y,y
         clc
         adc temp_w
         sta S_XYPos,x
@@ -360,19 +402,29 @@ DoWorldUpdate   subroutine
         bpl .3                  ; above ground level?
         tya
         tax
-        inc o_velY,x            ;   yes, increase downward velocity
+        inc obj_vel_y,x         ;   yes, increase downward velocity
         clc
         bcc .4                  ;   jump always
 .3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
         sta S_XYPos,x           ;
         lda #0                  ;   reset velocity
-        sta o_velY,y            ;
-        lda #stand              ;   set to standing
-        sta o_currentAction,y
-.4
-        ; smooth scroll screen
-        subroutine
-        lda S_XYPos             ; get player's(sprite 0) X position
+        sta obj_vel_y,y         ;
+        lda #ACT_STAND          ;   set to standing
+        sta obj_current_action,y
+.4      rts
+
+
+; ******************* ScreenScroll *******************
+;
+; Purpose:      set smooth scroll position
+;
+; Input:        .A      the sprite to center around(0-7)
+;
+ScreenScroll    subroutine
+        clc
+        asl
+        tax
+        lda S_XYPos,x
         sec
         sbc #160                ; X distance from center
         bpl .1
@@ -394,10 +446,10 @@ DoWorldUpdate   subroutine
         dec rough_scroll
 .4      and #%00000111
         sta fine_scroll
-        lda S_XYPos             ; add offset to sprite position
+        lda S_XYPos,x          ; add offset to target sprite position
         sec
         sbc temp_w
-        sta S_XYPos
+        sta S_XYPos,x
         lda temp_w
         clc
         and #%11111000
@@ -409,17 +461,6 @@ DoWorldUpdate   subroutine
         ror
 .6      adc rough_scroll
         sta rough_scroll
-
-        ; re-update sprite positions
-        ;lda temp_w
-
-        ; TODO: this only needs to happen if rough scroll has changed
-        jsr DrawLevelToOffscreen
-
-        ;lda #1                 ; tell screenUpdate to update screen
-        ;sta ScreenNeedsUpdating
-        jsr RequestWorldScreenUpdate
-
         rts
 
 

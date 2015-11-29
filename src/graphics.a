@@ -198,7 +198,7 @@ Int_WorldScreenUpdate    subroutine
         ldx #<SPR_PTR_OFFSET
         stx .spr+1
         ldx #7                  ; copy
-.usp2   lda o_info,x            ; carry = facing bit
+.usp2   lda obj_info,x            ; carry = facing bit
         lsr
         lsr
         lda S_spriteDataPtr,x

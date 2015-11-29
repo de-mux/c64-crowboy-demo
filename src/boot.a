@@ -274,7 +274,7 @@ C64_LOGO_SPRITE_DATA:
 
         org $54C0,0     ; in-game sprites
 GAME_SPRITE_DATA:
-        incbin "gamesprites.spr"
+        incbin "gamesprites.bin"
 
         ECHO "Including Sprite Data:     ", SPRITE_DATA, "-", .-1
 

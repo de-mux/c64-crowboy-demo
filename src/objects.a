@@ -11,63 +11,61 @@
 ;
 kSpriteGroundLevel = 164        ; y position of sprites on ground level
 kRunSpeed = 5                   ; the speed at which characters run
-;
-;;Actions
-run = 0
-jump = 1
-land = 2
-stand = 3
-attack = 4
-die = 5
-beingHit = 6
-;
+
+;player states
+ACT_RUN = 0
+ACT_JUMP = 1
+ACT_LAND = 2
+ACT_STAND = 3
+ACT_ATTACK = 4
+ACT_DIE = 5
+ACT_BEING_HIT = 6
+
+OBJ_INFO_BIT_ACTIVE =    %00000001
+OBJ_INFO_BIT_FACING =    %00000010
+OBJ_INFO_BIT_NEWACTION = %00000100
+
 ;facings
-right = %00000000
-left = %00000010
+OBJ_INFO_FACING_RT =  %00000000
+OBJ_INFO_FACING_LFT = %00000010
 
-
+; Runtime state information about up to 8 game objects(characters, etc)
 object_record:          ; object records 0-7
-; record Object {
-;       byte info;      // Bit 0: active or inactive
-;                       // Bit 1: facing(0=right)
-;                       // Bit 2: newAction (whether a new action started)
-;                       //    other bits depend on what type of object
-;       byte type;
-;       byte currentAction;
-;       byte acceleration, velocity;
-;       ptr  actionArray;// points to the array of sprite data ptrs for various
-;                        //    actions
-;       byte extraInfo;   // extra info dependent of what type of object
-; };
-o_info:
+; info: Bit 0: active or inactive
+;       Bit 1: facing(0=right)
+;       Bit 2: newAction (whether a new action started)
+;          other bits depend on what type of object
+obj_info:
         DS.B 8
-o_type:
+obj_type:
         DS.B 8
-o_currentAction:
+obj_current_action:
         DS.B 8
-;o_acceleration:
+;obj_accel:
 ;       DS.B 8
-o_velX:
+obj_vel_x:
         DS.B 8
-o_velY:
+obj_vel_y:
         DS.B 8
-o_actionArrayLo:
+
+; actionArray: pointer to the array of sprite data indices for various actions
+obj_action_array_lo:
         DS.B 8
-o_actionArrayHi:
+obj_action_array_hi:
         DS.B 8
-o_extraInfo:
+
+; extra info specific to the type of object
+obj_extra_info:
         DS.B 8
 
 
 
 ; ******* Object Definitions ********
-;  defines what sprite data block to begin certain actions
-;  for characters:
-;       0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
-;       5 - die, 6 - beingHit
+; Define the list of sprite indices for each state.
+; See player states, above for the enumated states.
 ObjectPlayer:
-        DC.B 85, 83, 83, 83, 83, 83, 83
-
+        ;     R    J   L   S   A   D   H
+        DC.B 85, 103, 83, 83, 83, 83, 83
 
 
 ; ******************* CODE *******************
@@ -97,19 +95,19 @@ SetupPlayer     subroutine
         DC.B 0                  ; Sprite 0
 
         ;ldx #0
-        ;lda #run
-        ;ldy #right
+        ;lda #ACT_RUN
+        ;ldy #OBJ_INFO_FACING_RT
         ;jsr RequestAction
 
         ; get current action
         ldx #0
-        lda o_actionArrayLo,x
-        ldy o_actionArrayHi,x
+        lda obj_action_array_lo,x
+        ldy obj_action_array_hi,x
         sta temp_w
         sty temp_w+1
-        lda o_currentAction,x
+        lda obj_current_action,x
         tay
-        lda (temp_w),y            ; check sprite's image
+        lda (temp_w),y          ; check sprite's image
         ldy #0                  ; set sprite data ptr accordingly
         sta S_spriteDataPtr,y
         rts
@@ -128,7 +126,7 @@ SetupPlayer     subroutine
 ;               objectIndex(0-7)
 ;       Call this routine when a level begins
 ;
-; FIXME: create constants for all the indexes into an object record
+; FIXME: create enumerated constants for all the indicies into an object record
 GenerateObject  subroutine
         pla                     ; get return address(points to data following
         sta temp_w                ;   the JSR)
@@ -147,29 +145,29 @@ GenerateObject  subroutine
         ;   (used by WorldUpdate)
         ldy #0
         lda (temp_w),y
-        ora #1                  ; set bit 0 to 1.(active object)
-        sta o_info,x
+        ora #OBJ_INFO_BIT_ACTIVE ; set bit 0 to 1.(active object)
+        sta obj_info,x
         iny
         lda (temp_w),y
-        sta o_type,x
+        sta obj_type,x
         iny
         lda (temp_w),y
-        sta o_currentAction,x
+        sta obj_current_action,x
         iny
         lda (temp_w),y
-        sta o_velX,x
+        sta obj_vel_x,x
         iny
         lda (temp_w),y
-        sta o_velY,x
+        sta obj_vel_y,x
         iny
         lda (temp_w),y
-        sta o_actionArrayLo,x
+        sta obj_action_array_lo,x
         iny
         lda (temp_w),y
-        sta o_actionArrayHi,x
+        sta obj_action_array_hi,x
         iny
         lda (temp_w),y
-        sta o_extraInfo,x
+        sta obj_extra_info,x
 
 
         ; set sprite color
@@ -229,34 +227,36 @@ GenerateObject  subroutine
 ;
 ; How to use:
 ;       Load .X with the object to request (0-7)
-;       Load .A with the desired action (run, stand, attack, jump)
+;       Load .A with the desired action (run, stand, attack, jump, etc)
 ;       Load .Y with the desired facing (left or right)
 ;       Call this routine
 ;
 RequestAction   subroutine
-        sta temp_w                ; temp_w = desired action
-        lda o_currentAction,x   ; if action already being done, return
-        sta temp_w2               ;  temp2 = current action
-        cmp temp_w                ;
+.desired_action = temp_w
+.current_action = temp_w2
+        sta .desired_action
+        lda obj_current_action,x   ; if action already being done, return
+        sta .current_action
+        cmp .desired_action
         bne .newact             ;
-        lda o_info,x            ; if facing different, update action
-        and #%00000010
+        lda obj_info,x            ; if facing different, update action
+        and #OBJ_INFO_BIT_FACING
         sta temp_w3
         cpy temp_w3
         beq .exit
 .newact tya
-        ldy temp_w                ; action = run?
+        ldy .desired_action     ; action = run?
         bne .1
 
-        ; run
+        ; Action: run
         tay                     ; .Y = desired facing
-        lda temp_w2
-        cmp #stand              ;   if not standing or running,
+        lda .current_action
+        cmp #ACT_STAND              ;   if not standing or running,
                                 ;       can't run(go exit)
         beq .run1               ;
-        cmp #run                ;
+        cmp #ACT_RUN                ;
         bne .exit               ;
-.run1   ;lda o_info,x
+.run1   ;lda obj_info,x
         ;pha                    ; store current info
         ;and #%11111101
         ;and #%00000010         ; check facing
@@ -266,63 +266,63 @@ RequestAction   subroutine
 
         ;jmp .exit
         ;pha
-        ;lda temp_w2
-        ;cmp #run
+        ;lda .current_action
+        ;cmp #ACT_RUN
         ;beq .exit
         ;pla
 .face   ;pla                    ; set current facing to desired facing
         and #%11111101
         sty temp_w3
         ora temp_w3
-        sta o_info,x
+        sta obj_info,x
         lda #kRunSpeed          ; set velocity
-        cpy #right              ;  positive if facing right
+        cpy #OBJ_INFO_FACING_RT       ;  positive if facing right
         beq .rt                 ;
         lda #(-kRunSpeed)       ;  negative if facing left
-.rt     sta o_velX,x            ;
+.rt     sta obj_vel_x,x            ;
         jmp .setAction
 
 .1
         dey                     ; action = jump?
         bne .2
 
-        ; jump
-        lda temp_w2
-        cmp #attack
+        ; Action: jump
+        lda .current_action
+        cmp #ACT_ATTACK
         beq .exit
-        cmp #jump
+        cmp #ACT_JUMP
         beq .exit
         lda #(-8)               ; set jump velocity
-        sta o_velY,x
+        sta obj_vel_y,x
         jmp .setAction
 
 .2      dey
         dey                     ; action = stand?
         bne .3
 
-        ; stand
+        ; Action: stand
         lda #0
-        sta o_velX,x
+        sta obj_vel_x,x
         jmp .setAction
 
 .3      dey                     ; action = attack?
         bne .exit
 
-        ; attack
+        ; Action: attack
 
 .setAction:
 ; called if the action has been granted
-        lda o_info,x            ; newAction = true
+        lda obj_info,x            ; newAction = true
         ora #%00000100          ;
-        sta o_info,x
-        lda temp_w
+        sta obj_info,x
+        lda .desired_action
         tay                     ; y = theAction
-        sta o_currentAction
-        lda o_actionArrayLo,x
-        sta temp_w
-        lda o_actionArrayHi,x
-        sta temp_w+1
-        lda (temp_w),y            ; set sprite data pointer based on action
+        sta obj_current_action
+        lda obj_action_array_lo,x
+        sta .desired_action
+        lda obj_action_array_hi,x
+        sta .desired_action+1
+        lda (.desired_action),y            ; set initial sprite data pointer based on action
         sta S_spriteDataPtr,x
 
 
