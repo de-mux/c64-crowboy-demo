@@ -27,7 +27,7 @@ kResetBit:              ; used to reset a bit to 0-7
         DC.B $FE, $FD, $FB, $F7, $EF, $DF, $BF, $7F
 
         ; for Int_WorldScreenUpdate
-S_spriteDataPtr:        ;sprite data pointer for right-facing sprite
+S_spriteDataPtr:        ;sprite data pointer for current right-facing sprite
         DS.B 8          ;  add 1 to get left-facing version
 S_XYPos DS.W 8
 S_XMSB  DS.B 1

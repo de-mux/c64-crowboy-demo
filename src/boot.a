@@ -320,7 +320,7 @@ CODE_SEGMENT_2:
         ; information for sprite sequences, x offsets
         include "sprite_info.a"
 
-        ECHO "Writing Code Segment 2:    ",CODE_SEGMENT_2,"-",.-1," (",($D000 - .),"/",$D000-CODE_SEGMENT_2,"bytes remaining. )"
+        ECHO "Writing Code Segment 2:    ",CODE_SEGMENT_2,"-",.-1," (",($D000 - .)," of ",$D000-CODE_SEGMENT_2,"bytes remaining. )"
         ECHO ""
         ECHO ""
 

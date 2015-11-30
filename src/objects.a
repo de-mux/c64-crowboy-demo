@@ -15,11 +15,14 @@ kRunSpeed = 5                   ; the speed at which characters run
 ;player states
 ACT_RUN = 0
 ACT_JUMP = 1
-ACT_LAND = 2
-ACT_STAND = 3
-ACT_ATTACK = 4
-ACT_DIE = 5
-ACT_BEING_HIT = 6
+ACT_JUMP_KICK = 2
+ACT_JUMP_PUNCH = 3
+ACT_KICK = 4
+ACT_PUNCH = 5
+ACT_LAND = 6
+ACT_STAND = 7
+ACT_DIE = 8
+ACT_BEING_HIT = 9
 
 OBJ_INFO_BIT_ACTIVE =    %00000001
 OBJ_INFO_BIT_FACING =    %00000010
@@ -64,8 +67,8 @@ obj_extra_info:
 ; Define the list of sprite indices for each state.
 ; See player states, above for the enumated states.
 ObjectPlayer:
-        ;     R    J   L   S   A   D   H
-        DC.B 85, 103, 83, 83, 83, 83, 83
+        ;        run jump jkik jpnch kick pnch land stnd  die  hit
+        DC.B      85, 103, 103,  103, 103, 103, 105,  83,  83,  83
 
 
 ; ******************* CODE *******************
@@ -223,97 +226,118 @@ GenerateObject  subroutine
 ;
 ; Purpose:              requests that a character begin a certain action
 ;                       (for actions, see "Actions," above)
-; Registers used:
-;
-; How to use:
-;       Load .X with the object to request (0-7)
-;       Load .A with the desired action (run, stand, attack, jump, etc)
-;       Load .Y with the desired facing (left or right)
-;       Call this routine
+; Arguments:
+;       .X      the object to request (0-7)
+;       .A      the desired action (run, stand, attack, jump, etc)
+;       .Y      the desired facing (left or right)
 ;
 RequestAction   subroutine
 .desired_action = temp_w
 .current_action = temp_w2
+.cur_facing = temp_w3
+        ; if new action is requested, or facing different direction, update action
         sta .desired_action
-        lda obj_current_action,x   ; if action already being done, return
+        lda obj_current_action,x
         sta .current_action
         cmp .desired_action
-        bne .newact             ;
-        lda obj_info,x            ; if facing different, update action
+        bne .newact
+        ; facing different?
+        lda obj_info,x
         and #OBJ_INFO_BIT_FACING
-        sta temp_w3
-        cpy temp_w3
-        beq .exit
-.newact tya
+        sta .cur_facing
+        cpy .cur_facing
+        bne .newact
+        jmp .exit
+
+.newact tya                     ; .A = facing
         ldy .desired_action     ; action = run?
-        bne .1
+        beq .0
+        dey
+        beq .1
+        dey
+        beq .2
+        dey
+        beq .3
+        dey
+        beq .4
+        dey
+        beq .5
+        dey
+        beq .6
+        dey
+        beq .7
+        dey
+        beq .8
+        dey
+        beq .9
+        rts             ; invalid
+.jmptable:
+.0      jmp .run
+.1      jmp .jump
+.2      jmp .jump_kick
+.3      jmp .jump_punch
+.4      jmp .kick
+.5      jmp .punch
+.6      jmp .land
+.7      jmp .stand
+.8      jmp .die
+.9      jmp .hit
 
         ; Action: run
+.run
         tay                     ; .Y = desired facing
         lda .current_action
-        cmp #ACT_STAND              ;   if not standing or running,
-                                ;       can't run(go exit)
-        beq .run1               ;
-        cmp #ACT_RUN                ;
+        cmp #ACT_STAND          ;   if not standing or running, can't run(go exit)
+        beq .dorun               ;
+        cmp #ACT_RUN            ;
         bne .exit               ;
-.run1   ;lda obj_info,x
-        ;pha                    ; store current info
-        ;and #%11111101
-        ;and #%00000010         ; check facing
-        ;sta temp_w3              ; temp_w3 = current facing
-        ;cpy temp_w3
-        ;bne .face              ; can't start run again in same direction!
-
-        ;jmp .exit
-        ;pha
-        ;lda .current_action
-        ;cmp #ACT_RUN
-        ;beq .exit
-        ;pla
-.face   ;pla                    ; set current facing to desired facing
-        and #%11111101
-        sty temp_w3
-        ora temp_w3
+.dorun:
+        and #~OBJ_INFO_BIT_FACING
+        sty .cur_facing
+        ora .cur_facing
         sta obj_info,x
         lda #kRunSpeed          ; set velocity
-        cpy #OBJ_INFO_FACING_RT       ;  positive if facing right
+        cpy #OBJ_INFO_FACING_RT ;  positive if facing right
         beq .rt                 ;
         lda #(-kRunSpeed)       ;  negative if facing left
-.rt     sta obj_vel_x,x            ;
+.rt     sta obj_vel_x,x
         jmp .setAction
 
-.1
-        dey                     ; action = jump?
-        bne .2
-
         ; Action: jump
+.jump:
         lda .current_action
-        cmp #ACT_ATTACK
-        beq .exit
-        cmp #ACT_JUMP
-        beq .exit
+        ; can only jump if standing or running
+        cmp #ACT_RUN
+        beq .dojump
+        cmp #ACT_STAND
+        beq .dojump
+        bne .exit               ; branch always
+.dojump:
         lda #(-8)               ; set jump velocity
         sta obj_vel_y,x
         jmp .setAction
 
-.2      dey
-        dey                     ; action = stand?
-        bne .3
-
+.stand:
         ; Action: stand
         lda #0
         sta obj_vel_x,x
         jmp .setAction
 
-.3      dey                     ; action = attack?
-        bne .exit
-
-        ; Action: attack
+        ; TODO: actions not yet implemented
+.jump_kick:
+.jump_punch:
+.kick:
+.punch:
+.land:
+.attack:
+.die:
+.hit:
+        jmp .exit
 
 .setAction:
 ; called if the action has been granted
         lda obj_info,x            ; newAction = true
-        ora #%00000100          ;
+        ora #OBJ_INFO_BIT_NEWACTION
         sta obj_info,x
         lda .desired_action
         tay                     ; y = theAction
@@ -325,10 +349,7 @@ RequestAction   subroutine
         lda (.desired_action),y            ; set initial sprite data pointer based on action
         sta S_spriteDataPtr,x
 
-
 .exit   rts
-;       0 - run, 1 - jump, 2 - land, 3 - stand, 4 - attack,
-;       5 - die, 6 - beingHit
 
 ; ******************* DisableSprite *******************
 ;

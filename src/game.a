@@ -281,7 +281,8 @@ DoWorldUpdate   subroutine
         ; read user input and request action
         jsr ReadJoy
         jsr PlayerHandleJoystick
-        jsr SpritesUpdatePosition
+        jsr PlayerSpriteUpdatePosition
+        jsr PlayerUpdateVelocityAndState
         jsr SpriteAnimationNextFrame
 
         ; scroll screen based on player(sprite 0)'s X position
@@ -326,7 +327,7 @@ PlayerHandleJoystick    subroutine
         lda #ACT_RUN            ; if X = 1, run right
         ldy #OBJ_INFO_FACING_RT
         jmp .req_act
-.2      lda #ACT_STAND          ; otherwise, stand
+.2:     lda #ACT_STAND          ; otherwise, attempt to stand
 .req_act:
         ldx #0
         jsr RequestAction
@@ -340,11 +341,12 @@ PlayerHandleJoystick    subroutine
         lda .fire               ; if (fire) then attack
         beq .5
         ldx #0
-        lda #ACT_ATTACK
+        lda #ACT_KICK
         jsr RequestAction
-        jmp .5
 
-.5:     rts
+.5:
+.exit:
+        rts
 
 
 ; ******************* SpriteAnimationNextFrame *******************
@@ -364,39 +366,64 @@ SpriteAnimationNextFrame subroutine
         rts
 
 
+PlayerSpriteUpdatePosition      subroutine
+        ldx #0
+        ; fallthrough intentional
 ; ******************* SpritesUpdatePosition *******************
 ;
 ; Purpose:      update sprite position from velocity
 ;
-; Input:        None
+; Input:        .X      the sprite to update(0-7)
 SpritesUpdatePosition   subroutine
-        ldx #0
+.spr_x_offs = temp_w
         ldy S_spriteDataPtr,x
-        lda obj_info,x          ; carry = facing bit
-        lsr
-        lsr
-        bcc .1                  ; if facing left, iny
+        ; if facing left, need to use the next sprite pointer
+        lda obj_info,x
+        and #OBJ_INFO_BIT_FACING
+        beq .1
         iny
-.1      lda SpriteOffset,y      ; temp_w = SpriteOffset[y]
+
+        ; if there is a non-zero x offset associated with this sprite, use it
+        ;  to update position, otherwise use the sprite velocity
+.1      lda SpriteOffset,y
         bne .2
-        lda obj_vel_x,x         ; if 0, temp = obj_vel_x[x]
-.2      sta temp_w
+        lda obj_vel_x,x
+.2      sta .spr_x_offs
+        ; y = object #, x = x*2
         txa
-        tay                     ; y = object #
-        asl                     ; X = X*2
+        tay
+        asl
         tax
-        lda S_XYPos,x           ; add sprite velocity to current X position
-        clc
-        adc temp_w
-        sta S_XYPos,x
-        inx                     ; add sprite vel to current Y position
+        ; add sprite velocity to current X position
         lda S_XYPos,x
-        sta temp_w
+        clc
+        adc .spr_x_offs
+        sta S_XYPos,x
+        ; add sprite vel to current Y position
+        lda S_XYPos+1,x
+        sta .spr_x_offs
         lda obj_vel_y,y
         clc
-        adc temp_w
-        sta S_XYPos,x
+        adc .spr_x_offs
+        sta S_XYPos+1,x
+        rts
 
+
+PlayerUpdateVelocityAndState    subroutine
+        ldy #0                  ; player sprite
+        ; fallthrough intentional
+; ******************* ObjectUpdateVelocityAndState *******************
+;
+; Purpose:      update object velocity and state
+;
+; Input:        .Y      the sprite to update(0-7)
+ObjectUpdateVelocityAndState    subroutine
+        ; x = y*2
+        tya
+        asl
+        tax
+        lda S_XYPos+1,x
+        ; A is the sprite Y position
         cmp #kSpriteGroundLevel ; is sprite at ground level?
         beq .4                  ; yes, do nothing
         bpl .3                  ; above ground level?
@@ -404,9 +431,10 @@ SpritesUpdatePosition   subroutine
         tax
         inc obj_vel_y,x         ;   yes, increase downward velocity
         clc
-        bcc .4                  ;   jump always
+        bcc .4                  ;   branch always
+
 .3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
-        sta S_XYPos,x           ;
+        sta S_XYPos+1,x         ;
         lda #0                  ;   reset velocity
         sta obj_vel_y,y         ;
         lda #ACT_STAND          ;   set to standing
