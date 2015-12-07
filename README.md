@@ -17,9 +17,9 @@ These sprites are all compiled into a single file, `sprites/gamesprites.spr` whi
 Tools
 -----
 
-[DASM](http://sourceforge.net/projects/dasm-dillon/) 2.20.11 20140304 - Assembler
-C1541 (included with [VICE](http://vice-emu.sourceforge.net/) emulator) - .D64 manipulation tool
-[SpriteWorld](http://csdb.dk/release/?id=31201) - sprite editor
-[VoiceTracker](http://csdb.dk/release/?id=2665) 4.2 - music tracker
-[pucrunch](https://github.com/mist64/pucrunch) - byte cruncher
+* [DASM](http://sourceforge.net/projects/dasm-dillon/) 2.20.11 20140304 - Assembler
+* C1541 (included with [VICE](http://vice-emu.sourceforge.net/) emulator) - .D64 manipulation tool
+* [SpriteWorld](http://csdb.dk/release/?id=31201) - sprite editor
+* [VoiceTracker](http://csdb.dk/release/?id=2665) 4.2 - music tracker
+* [pucrunch](https://github.com/mist64/pucrunch) - byte cruncher
 
