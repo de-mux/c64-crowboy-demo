@@ -60,6 +60,14 @@ menu_next_mode  DC.B 0  ; store the value of the mode to set after fadeout
 ; Int_WorldScreenUpdate
 rough_scroll    DC.B 0  ; current level rough scroll pos(upper-left lo-byte)
 fine_scroll     DC.B 0  ; smooth X scroll
+; buffers for sprite/object information. These are updated by the game engine
+;  and then copied to the actual VIC registers each frame
+spr_data_ptrs:          ;sprite data pointers for current right-facing sprite
+        DS.B 8          ;  add 1 to get left-facing version
+spr_xy_pos      DS.W 8  ; pairs of x/y coordinate bytes for sprites
+spr_x_pos_msb   DS.B 1  ; 9th bit(MSB) for sprite x position
+spr_enable      DS.B 1  ; bits representing on/off for each of the 8 sprites
+
 
 ; Screen
 screen_update_flag DC.B 0 ; 1 means screen needs updating
@@ -85,6 +93,7 @@ level_header_flags DC.B 0 ; see Levels below for meaning of bits
 reset_flag      DC.B 0  ; whether or not game has been reset
 mode            DC.B 0  ; mode of game (see game.a)
 NextLevel       DC.W 0  ; ptr to the next level
+jump_latch      DC.B 0  ; player must release jump button before allowed to jump again
 
 ; Music
 MusicZP         DC.B 0,0,0,0,0,0        ; used by music routine ($FA-$FF)

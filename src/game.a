@@ -260,13 +260,12 @@ DoSetupLevel    subroutine
         pla                     ; get ChrSet to use for this level
         sta temp_w
         lda VICMEM
-        and #%11110000
+        and #VICMEM_VIDEO_ADDR_SELECT_MASK
         ora temp_w
         sta VICMEM
 
         ; disable all sprites
-        lda #0
-        sta S_enable
+        jsr DisableAllSprites
 
         ; create the player object
         jsr SetupPlayer
@@ -278,12 +277,15 @@ DoSetupLevel    subroutine
 
 ;flipbit DC.B 0
 DoWorldUpdate   subroutine
-        ; read user input and request action
-        jsr ReadJoy
-        jsr PlayerHandleJoystick
+
+        ; update player/sprites
         jsr PlayerSpriteUpdatePosition
         jsr PlayerUpdateVelocityAndState
         jsr SpriteAnimationNextFrame
+
+        ; read user input and request action
+        jsr ReadJoy
+        jsr PlayerHandleJoystick
 
         ; scroll screen based on player(sprite 0)'s X position
         lda #0
@@ -332,19 +334,26 @@ PlayerHandleJoystick    subroutine
         ldx #0
         jsr RequestAction
 
-        ldy .y                  ; if Y = -1
+        ldy .y                  ; if Y = -1 (jump)
         bpl .4
+        lda jump_latch          ;  must release jump button before jumping again
+        beq .exit
         ldx #0                  ; jump
+        stx jump_latch          ; to prevent user from holding down jump
         lda #ACT_JUMP
         jsr RequestAction
-.4:
+        jmp .5
+.4:     ; jump not pressed, reset jump latch
+        lda #1
+        sta jump_latch
+.5:
         lda .fire               ; if (fire) then attack
-        beq .5
+        beq .6
         ldx #0
         lda #ACT_KICK
         jsr RequestAction
 
-.5:
+.6:
 .exit:
         rts
 
@@ -359,10 +368,10 @@ PlayerHandleJoystick    subroutine
 ;       more sprites are added
 SpriteAnimationNextFrame subroutine
         ldx #0                  ; player sprite
-        lda S_spriteDataPtr,x   ; .Y = sprite #
+        lda spr_data_ptrs,x   ; .Y = sprite #
         tay
         lda SpriteSequence,y
-        sta S_spriteDataPtr,x
+        sta spr_data_ptrs,x
         rts
 
 
@@ -376,7 +385,7 @@ PlayerSpriteUpdatePosition      subroutine
 ; Input:        .X      the sprite to update(0-7)
 SpritesUpdatePosition   subroutine
 .spr_x_offs = temp_w
-        ldy S_spriteDataPtr,x
+        ldy spr_data_ptrs,x
         ; if facing left, need to use the next sprite pointer
         lda obj_info,x
         and #OBJ_INFO_BIT_FACING
@@ -395,51 +404,18 @@ SpritesUpdatePosition   subroutine
         asl
         tax
         ; add sprite velocity to current X position
-        lda S_XYPos,x
+        lda spr_xy_pos,x
         clc
         adc .spr_x_offs
-        sta S_XYPos,x
+        sta spr_xy_pos,x
         ; add sprite vel to current Y position
-        lda S_XYPos+1,x
+        lda spr_xy_pos+1,x
         sta .spr_x_offs
         lda obj_vel_y,y
         clc
         adc .spr_x_offs
-        sta S_XYPos+1,x
+        sta spr_xy_pos+1,x
         rts
-
-
-PlayerUpdateVelocityAndState    subroutine
-        ldy #0                  ; player sprite
-        ; fallthrough intentional
-; ******************* ObjectUpdateVelocityAndState *******************
-;
-; Purpose:      update object velocity and state
-;
-; Input:        .Y      the sprite to update(0-7)
-ObjectUpdateVelocityAndState    subroutine
-        ; x = y*2
-        tya
-        asl
-        tax
-        lda S_XYPos+1,x
-        ; A is the sprite Y position
-        cmp #kSpriteGroundLevel ; is sprite at ground level?
-        beq .4                  ; yes, do nothing
-        bpl .3                  ; above ground level?
-        tya
-        tax
-        inc obj_vel_y,x         ;   yes, increase downward velocity
-        clc
-        bcc .4                  ;   branch always
-
-.3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
-        sta S_XYPos+1,x         ;
-        lda #0                  ;   reset velocity
-        sta obj_vel_y,y         ;
-        lda #ACT_STAND          ;   set to standing
-        sta obj_current_action,y
-.4      rts
 
 
 ; ******************* ScreenScroll *******************
@@ -452,7 +428,7 @@ ScreenScroll    subroutine
         clc
         asl
         tax
-        lda S_XYPos,x
+        lda spr_xy_pos,x
         sec
         sbc #160                ; X distance from center
         bpl .1
@@ -474,10 +450,10 @@ ScreenScroll    subroutine
         dec rough_scroll
 .4      and #%00000111
         sta fine_scroll
-        lda S_XYPos,x          ; add offset to target sprite position
+        lda spr_xy_pos,x          ; add offset to target sprite position
         sec
         sbc temp_w
-        sta S_XYPos,x
+        sta spr_xy_pos,x
         lda temp_w
         clc
         and #%11111000

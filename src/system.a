@@ -59,7 +59,8 @@ KERNALROM  = $E000
 
 ; Sprites
 SPR_PTR_OFFSET = $03F8  ; offset to sprite pointers(relative to screen memory)
-SPR0X      = $D000  ;sprite 0-7 x and y positions
+SPRPOS     = $D000  ;sprite 0-7 x and y positions
+SPR0X      = $D000
 SPR0Y      = $D001
 SPR1X      = $D002
 SPR1Y      = $D003

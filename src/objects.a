@@ -3,14 +3,15 @@
 ;
 ; File : objects.a
 ;
-; Contains : Routines for creating and maintaining objects
+; Contains : Routines for creating and maintaining objects.
+;               Includes state changes and updates.
 ;
 
 
 ; ******************* DATA *******************
 ;
 kSpriteGroundLevel = 164        ; y position of sprites on ground level
-kRunSpeed = 5                   ; the speed at which characters run
+kRunVelocity = 5                ; the x-velocity at which characters run
 
 ;player states
 ACT_RUN = 0
@@ -68,7 +69,7 @@ obj_extra_info:
 ; See player states, above for the enumated states.
 ObjectPlayer:
         ;        run jump jkik jpnch kick pnch land stnd  die  hit
-        DC.B      85, 103, 103,  103, 103, 103, 105,  83,  83,  83
+        DC.B      85, 103, 105,  105, 105, 105,  83,  83,  83,  83
 
 
 ; ******************* CODE *******************
@@ -87,13 +88,13 @@ SetupPlayer     subroutine
         DC.B 0                  ; info
         DC.B 0                  ; type (0=player)
 ;       DC.B 3                  ; 3 = standing
-        DC.B 0                  ; 0 = running
+        DC.B ACT_JUMP           ; starting action
         DC.B 0                  ; velX = 0
         DC.B 0                  ; velY = 0
         DC.W ObjectPlayer       ; points to action array
         DC.B 0                  ; no extra info
         DC.B 0                  ; color
-        DC.B kSpriteGroundLevel ; YPos = 164
+        DC.B kSpriteGroundLevel-10 ; YPos = 164
         DC.W 160                ; XPos = 160
         DC.B 0                  ; Sprite 0
 
@@ -112,7 +113,7 @@ SetupPlayer     subroutine
         tay
         lda (temp_w),y          ; check sprite's image
         ldy #0                  ; set sprite data ptr accordingly
-        sta S_spriteDataPtr,y
+        sta spr_data_ptrs,y
         rts
 
 
@@ -131,90 +132,90 @@ SetupPlayer     subroutine
 ;
 ; FIXME: create enumerated constants for all the indicies into an object record
 GenerateObject  subroutine
+.obj_data_ptr = temp_w
         pla                     ; get return address(points to data following
-        sta temp_w                ;   the JSR)
+        sta .obj_data_ptr       ;   the JSR)
         pla
-        sta temp_w+1
-        inc temp_w                ; add 1 to pointer
+        sta .obj_data_ptr+1
+        inc .obj_data_ptr       ; add 1 to pointer
         bne .add
-        inc temp_w+1
+        inc .obj_data_ptr+1
 .add:
 
         ldy #12                 ; what is object's index?(0-7)
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         tax                     ; store in x for later
 
         ; copy data into object record
         ;   (used by WorldUpdate)
         ldy #0
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         ora #OBJ_INFO_BIT_ACTIVE ; set bit 0 to 1.(active object)
         sta obj_info,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_type,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_current_action,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_vel_x,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_vel_y,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_action_array_lo,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_action_array_hi,x
         iny
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta obj_extra_info,x
-
 
         ; set sprite color
         ldy #8
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         sta SPR0C,x
 
         ; copy data into sprite record
         ;   (setup by WorldUpdate, copied to
         ;    VIC memory by Int_WorldScreenUpdate)
         lda kResetBit,x         ; initially reset X MSB
-        and S_XMSB
-        sta S_XMSB
+        and spr_x_pos_msb
+        sta spr_x_pos_msb
         ldy #11                 ; get X MSB
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         lsr
         bcc .out1
         lda kSetBit,x           ; set sprite's X MSB bit
-        ora S_XMSB
-        sta S_XMSB
+        ora spr_x_pos_msb
+        sta spr_x_pos_msb
 .out1:
         ; enable the sprite
         lda kSetBit,x
-        ora S_enable
-        sta S_enable
+        ora spr_enable
+        sta spr_enable
 
         ; copy X and Y positions
         txa                     ; X = X * 2
         asl
         tax
         dey                     ; get X pos
-        lda (temp_w),y
-        sta S_XYPos,x
+        lda (.obj_data_ptr),y
+        sta spr_xy_pos,x
         dey                     ; get Y pos
-        lda (temp_w),y
+        lda (.obj_data_ptr),y
         inx
-        sta S_XYPos,x
+        sta spr_xy_pos,x
 
         ; set return address to instruction after data
-        lda temp_w                ; A = (temp_w)+12
+        lda .obj_data_ptr       ; A = (.obj_data_ptr)+12
         clc
         adc #12
         tax                     ; X = A
-        lda temp_w+1              ; A = (temp_w+1)+C
+        lda .obj_data_ptr+1     ; A = (.obj_data_ptr+1)+C
         adc #0
         pha
         txa
@@ -296,10 +297,10 @@ RequestAction   subroutine
         sty .cur_facing
         ora .cur_facing
         sta obj_info,x
-        lda #kRunSpeed          ; set velocity
+        lda #kRunVelocity          ; set velocity
         cpy #OBJ_INFO_FACING_RT ;  positive if facing right
         beq .rt                 ;
-        lda #(-kRunSpeed)       ;  negative if facing left
+        lda #(-kRunVelocity)       ;  negative if facing left
 .rt     sta obj_vel_x,x
         jmp .setAction
 
@@ -319,6 +320,9 @@ RequestAction   subroutine
 
 .stand:
         ; Action: stand
+        lda spr_xy_pos+1,x
+        cmp #kSpriteGroundLevel
+        bne .exit
         lda #0
         sta obj_vel_x,x
         jmp .setAction
@@ -329,6 +333,10 @@ RequestAction   subroutine
 .kick:
 .punch:
 .land:
+        ; Action: land
+        lda #0                  ;   reset y velocity
+        sta obj_vel_y,y         ;
+        jmp .setAction
 .attack:
 .die:
 .hit:
@@ -347,23 +355,81 @@ RequestAction   subroutine
         lda obj_action_array_hi,x
         sta .desired_action+1
         lda (.desired_action),y            ; set initial sprite data pointer based on action
-        sta S_spriteDataPtr,x
+        sta spr_data_ptrs,x
 
 .exit   rts
 
+
+PlayerUpdateVelocityAndState    subroutine
+        ldy #0                  ; player sprite
+        ; fallthrough intentional
+; ******************* ObjectUpdateVelocityAndState *******************
+;
+; Purpose:      update object velocity and state
+;
+; Input:        .Y      the sprite to update(0-7)
+ObjectUpdateVelocityAndState    subroutine
+        ; x = y*2
+        tya
+        asl
+        tax
+        lda spr_xy_pos+1,x
+        ; A is the sprite Y position
+        cmp #kSpriteGroundLevel ; is sprite at ground level?
+        beq .4                  ; yes, do nothing
+        bpl .3                  ; above ground level?
+        tya
+        tax
+        inc obj_vel_y,x         ;   yes, increase downward velocity
+        clc
+        bcc .4                  ;   branch always
+
+.3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
+        sta spr_xy_pos+1,x         ;
+        ;lda #0                  ;   reset velocity
+        ;sta obj_vel_y,y         ;
+        ;lda #ACT_STAND          ;   set to standing
+        ;sta obj_current_action,y
+        lda obj_info,x
+        and #OBJ_INFO_BIT_FACING
+        tay
+        lda #ACT_LAND
+        jsr RequestAction
+        rts
+.4:
+        ; update state based on previous state
+        lda obj_info,x
+        and #OBJ_INFO_BIT_FACING
+        tay
+
+        ; change from land -> stand
+        lda obj_current_action,x
+        cmp #ACT_LAND
+        bne .5
+        lda #ACT_STAND
+        jsr RequestAction
+.5:
+        rts
+
+
 ; ******************* DisableSprite *******************
 ;
-; Purpose:              Disables sprite
+; Purpose:              Disables a sprite
 ;
 ; Registers used:
 ;
 ; How to use:
-;       Load .X with the object to disable (0-7)
+;       Load .X with the sprite to disable (0-7)
 ;       Call this routine
 ;
 DisableSprite   subroutine
         lda kResetBit,x
-        and S_enable
-        sta S_enable
+        and spr_enable
+        sta spr_enable
+        rts
+
+DisableAllSprites       subroutine
+        lda #0
+        sta spr_enable
         rts
 

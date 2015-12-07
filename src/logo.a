@@ -131,7 +131,7 @@ C64LOGO subroutine
 .L3     DEX
         BMI .ROUT2
         LDA .SPRXY,X
-        STA SPR0X,X
+        STA SPRPOS,X
         JMP .L3
 .ROUT2  LDX #$07        ;set sprite pointers
 .L4     DEX

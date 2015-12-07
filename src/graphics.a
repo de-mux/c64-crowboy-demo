@@ -26,13 +26,6 @@ kSetBit:                ; used to set a bit to 0-7
 kResetBit:              ; used to reset a bit to 0-7
         DC.B $FE, $FD, $FB, $F7, $EF, $DF, $BF, $7F
 
-        ; for Int_WorldScreenUpdate
-S_spriteDataPtr:        ;sprite data pointer for current right-facing sprite
-        DS.B 8          ;  add 1 to get left-facing version
-S_XYPos DS.W 8
-S_XMSB  DS.B 1
-S_enable DS.B 1
-
 
 ; ******************* CODE *******************
 ;
@@ -201,7 +194,7 @@ Int_WorldScreenUpdate    subroutine
 .usp2   lda obj_info,x            ; carry = facing bit
         lsr
         lsr
-        lda S_spriteDataPtr,x
+        lda spr_data_ptrs,x
         adc #0                  ; add carry to .A (facing bit)
 .spr    sta $FFFF,x             ; self-modifying address
         dex
@@ -209,13 +202,13 @@ Int_WorldScreenUpdate    subroutine
 
         ; position sprites
         ldx #16                 ; the 16th index is the sprite X MSBs
-.ps1    lda S_XYPos,x
-        sta SPR0X,x
+.ps1    lda spr_xy_pos,x
+        sta SPRPOS,x
         dex
         bpl .ps1
 
         ; enable/disable sprites
-        lda S_enable
+        lda spr_enable
         sta SPRDISP
 
         ; set interrupt back to Int_ModeJump

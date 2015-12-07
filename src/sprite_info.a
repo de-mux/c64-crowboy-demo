@@ -49,16 +49,17 @@ SpriteOffset = . - 83
 	; Ping begin run
 	DC.B 0,0                ; 85
 	; Ping running loop
-	DC.B 4,-4               ; 87
+	DC.B 4,-4               ; 87  start step
 	DC.B 6,-6               ; 89
 	DC.B 6,-6		; 91  airborn
-	DC.B 6,-6               ; 93  airborn
-	DC.B 4,-4               ; 95
+	DC.B 6,-6               ; 93  one foot land
+	DC.B 4,-4               ; 95  start step
 	DC.B 6,-6               ; 97
 	DC.B 6,-6		; 99  airborn
-	DC.B 6,-6		; 101 airborn
+	DC.B 6,-6		; 101 one foot land
         ; Ping starting to jump
         DC.B 0,0                ; 103
         ; Ping jumping
-        DC.B 5,-5               ; 105
+        ;DC.B 5,-5               ; 105
+        DC.B 0,-0               ; 105
 	
