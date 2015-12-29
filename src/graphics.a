@@ -139,6 +139,70 @@ DrawLevelToOffscreen    subroutine
         rts
 
 
+; ******************* ScreenScroll *******************
+;
+; Purpose:      Set smooth scroll position based on a particular sprite
+;               and update the sprite position based on the scroll delta.
+;               Makes the assumption that the sprite X position is <=255
+;
+;               TODO: need to update this to update all sprite positions
+;                       once other sprites are added
+;
+; Input:        .A      the sprite to center around(0-7)
+;
+ScreenScroll    subroutine
+.dist_center = temp_w
+        clc
+        asl
+        tax
+        lda spr_xy_pos,x
+        sec
+        sbc #160                ; X distance from center
+        bpl .1
+        lsr                     ; divide by 4(to introduce slight lag in scroll)
+        lsr
+        ora #%11000000          ; extend sign
+        jmp .2
+.1      lsr
+        lsr
+.2      sta .dist_center
+        lda fine_scroll
+        sec                     ; add offset to finescroll
+        sbc .dist_center
+        ; if result is negative, increase roughscroll
+        bpl .3
+        ldy rough_scroll        ; prevent scroll if at right-edge of level
+        cpy #(LEVEL_PACKED_WIDTH*LEVEL_BLOCK_SIZE - SCREEN_WIDTH - 1)
+        bcs .rts
+        inc rough_scroll
+        jmp .4
+        ; if result > 8, decrease roughscroll
+.3      cmp #8
+        bmi .4
+        ldy rough_scroll        ; prevent scroll if at left-edge of level
+        beq .rts
+        dec rough_scroll
+.4      and #%00000111
+        sta fine_scroll
+        lda spr_xy_pos,x        ; add offset to target sprite position
+        sec
+        sbc .dist_center
+        sta spr_xy_pos,x
+        lda .dist_center
+        clc
+        and #%11111000
+        bpl .5
+        sec
+        ora #%00000111
+.5      ror                     ; add offset to roughscroll
+        ror
+        ror
+.6      adc rough_scroll
+        sta rough_scroll
+.rts
+        rts
+
+
 ; ******************* RequestWorldScreenUpdate *******************
 ; Setup next interrupt for a screen update.
 ;
@@ -156,6 +220,7 @@ RequestWorldScreenUpdate  subroutine
 ; Purpose:              update the screen
 ;                         copy offscreen color to color memory
 ;                         flip screen memory page
+;                         copy offscreen sprite params to screen
 ;
 ; Registers used:       .A, .X, .Y
 ;

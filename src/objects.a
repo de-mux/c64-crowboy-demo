@@ -12,6 +12,10 @@
 ;
 kSpriteGroundLevel = 164        ; y position of sprites on ground level
 kRunVelocity = 5                ; the x-velocity at which characters run
+kJumpVelocity = 6               ; the initial y-velocity at which characters jump
+; prevent sprites from getting to close to either edge
+kSpriteMinXPos = 70
+kSpriteMaxXPos = 255
 
 ;player states
 ACT_RUN = 0
@@ -32,36 +36,6 @@ OBJ_INFO_BIT_NEWACTION = %00000100
 ;facings
 OBJ_INFO_FACING_RT =  %00000000
 OBJ_INFO_FACING_LFT = %00000010
-
-; Runtime state information about up to 8 game objects(characters, etc)
-object_record:          ; object records 0-7
-; info: Bit 0: active or inactive
-;       Bit 1: facing(0=right)
-;       Bit 2: newAction (whether a new action started)
-;          other bits depend on what type of object
-obj_info:
-        DS.B 8
-obj_type:
-        DS.B 8
-obj_current_action:
-        DS.B 8
-;obj_accel:
-;       DS.B 8
-obj_vel_x:
-        DS.B 8
-obj_vel_y:
-        DS.B 8
-
-; actionArray: pointer to the array of sprite data indices for various actions
-obj_action_array_lo:
-        DS.B 8
-obj_action_array_hi:
-        DS.B 8
-
-; extra info specific to the type of object
-obj_extra_info:
-        DS.B 8
-
 
 
 ; ******* Object Definitions ********
@@ -289,18 +263,20 @@ RequestAction   subroutine
         tay                     ; .Y = desired facing
         lda .current_action
         cmp #ACT_STAND          ;   if not standing or running, can't run(go exit)
-        beq .dorun               ;
-        cmp #ACT_RUN            ;
-        bne .exit               ;
+        beq .dorun
+        cmp #ACT_LAND
+        beq .dorun
+        cmp #ACT_RUN
+        bne .exit
 .dorun:
         and #~OBJ_INFO_BIT_FACING
         sty .cur_facing
         ora .cur_facing
         sta obj_info,x
-        lda #kRunVelocity          ; set velocity
+        lda #kRunVelocity       ; set velocity
         cpy #OBJ_INFO_FACING_RT ;  positive if facing right
-        beq .rt                 ;
-        lda #(-kRunVelocity)       ;  negative if facing left
+        beq .rt
+        lda #(-kRunVelocity)    ;  negative if facing left
 .rt     sta obj_vel_x,x
         jmp .setAction
 
@@ -314,7 +290,7 @@ RequestAction   subroutine
         beq .dojump
         bne .exit               ; branch always
 .dojump:
-        lda #(-8)               ; set jump velocity
+        lda #(-kJumpVelocity)               ; set jump velocity
         sta obj_vel_y,x
         jmp .setAction
 
@@ -385,11 +361,7 @@ ObjectUpdateVelocityAndState    subroutine
         bcc .4                  ;   branch always
 
 .3      lda #kSpriteGroundLevel ; else below ground level, set to ground level
-        sta spr_xy_pos+1,x         ;
-        ;lda #0                  ;   reset velocity
-        ;sta obj_vel_y,y         ;
-        ;lda #ACT_STAND          ;   set to standing
-        ;sta obj_current_action,y
+        sta spr_xy_pos+1,x
         lda obj_info,x
         and #OBJ_INFO_BIT_FACING
         tay
@@ -409,6 +381,71 @@ ObjectUpdateVelocityAndState    subroutine
         lda #ACT_STAND
         jsr RequestAction
 .5:
+        rts
+
+
+PlayerSpriteUpdatePosition      subroutine
+        ldx #0
+        ; fallthrough intentional
+; ******************* SpritesUpdatePosition *******************
+;
+; Purpose:      update sprite position from velocity
+;
+; Input:        .X      the sprite to update(0-7)
+SpritesUpdatePosition   subroutine
+.spr_x_offs = temp_w
+        ldy spr_data_ptrs,x
+        ; if facing left, need to use the next sprite pointer
+        lda obj_info,x
+        and #OBJ_INFO_BIT_FACING
+        beq .1
+        iny
+
+        ; if there is a non-zero x offset associated with this sprite, use it
+        ;  to update position, otherwise use the sprite velocity
+.1      lda SpriteOffset,y
+        bne .2
+        lda obj_vel_x,x
+.2      sta .spr_x_offs
+        ; y = object #, x = x*2
+        txa
+        tay
+        asl
+        tax
+        ; add sprite velocity to current X position
+        lda spr_xy_pos,x
+        clc
+        adc .spr_x_offs
+        cmp #kSpriteMinXPos
+        bcc .3
+        cmp #kSpriteMaxXPos
+        bcs .3
+        sta spr_xy_pos,x
+.3:
+        ; add sprite vel to current Y position
+        lda spr_xy_pos+1,x
+        sta .spr_x_offs
+        lda obj_vel_y,y
+        clc
+        adc .spr_x_offs
+        sta spr_xy_pos+1,x
+        rts
+
+
+; ******************* SpriteAnimationNextFrame *******************
+;
+; Purpose:      advance all sprite animations by one frame
+;
+; Input:        None
+;
+; TODO: currently only does sprite 0(player sprite). Needs to be fixed when
+;       more sprites are added
+SpriteAnimationNextFrame subroutine
+        ldx #0                  ; player sprite
+        lda spr_data_ptrs,x   ; .Y = sprite #
+        tay
+        lda SpriteSequence,y
+        sta spr_data_ptrs,x
         rts
 
 

@@ -274,11 +274,9 @@ DoSetupLevel    subroutine
         rts
 
 
-
-;flipbit DC.B 0
 DoWorldUpdate   subroutine
 
-        ; update player/sprites
+        ; update player/sprites buffers
         jsr PlayerSpriteUpdatePosition
         jsr PlayerUpdateVelocityAndState
         jsr SpriteAnimationNextFrame
@@ -357,115 +355,6 @@ PlayerHandleJoystick    subroutine
 .exit:
         rts
 
-
-; ******************* SpriteAnimationNextFrame *******************
-;
-; Purpose:      advance all sprite animations by one frame
-;
-; Input:        None
-;
-; TODO: currently only does sprite 0(player sprite). Needs to be fixed when
-;       more sprites are added
-SpriteAnimationNextFrame subroutine
-        ldx #0                  ; player sprite
-        lda spr_data_ptrs,x   ; .Y = sprite #
-        tay
-        lda SpriteSequence,y
-        sta spr_data_ptrs,x
-        rts
-
-
-PlayerSpriteUpdatePosition      subroutine
-        ldx #0
-        ; fallthrough intentional
-; ******************* SpritesUpdatePosition *******************
-;
-; Purpose:      update sprite position from velocity
-;
-; Input:        .X      the sprite to update(0-7)
-SpritesUpdatePosition   subroutine
-.spr_x_offs = temp_w
-        ldy spr_data_ptrs,x
-        ; if facing left, need to use the next sprite pointer
-        lda obj_info,x
-        and #OBJ_INFO_BIT_FACING
-        beq .1
-        iny
-
-        ; if there is a non-zero x offset associated with this sprite, use it
-        ;  to update position, otherwise use the sprite velocity
-.1      lda SpriteOffset,y
-        bne .2
-        lda obj_vel_x,x
-.2      sta .spr_x_offs
-        ; y = object #, x = x*2
-        txa
-        tay
-        asl
-        tax
-        ; add sprite velocity to current X position
-        lda spr_xy_pos,x
-        clc
-        adc .spr_x_offs
-        sta spr_xy_pos,x
-        ; add sprite vel to current Y position
-        lda spr_xy_pos+1,x
-        sta .spr_x_offs
-        lda obj_vel_y,y
-        clc
-        adc .spr_x_offs
-        sta spr_xy_pos+1,x
-        rts
-
-
-; ******************* ScreenScroll *******************
-;
-; Purpose:      set smooth scroll position
-;
-; Input:        .A      the sprite to center around(0-7)
-;
-ScreenScroll    subroutine
-        clc
-        asl
-        tax
-        lda spr_xy_pos,x
-        sec
-        sbc #160                ; X distance from center
-        bpl .1
-        lsr                     ; divide by 4
-        lsr
-        ora #%11000000          ; extend sign
-        jmp .2
-.1      lsr
-        lsr
-.2      sta temp_w
-        lda fine_scroll
-        sec                     ; add offset to finescroll
-        sbc temp_w
-        bpl .3                  ; if result is negative, increase roughscroll
-        inc rough_scroll
-        jmp .4
-.3      cmp #8
-        bmi .4
-        dec rough_scroll
-.4      and #%00000111
-        sta fine_scroll
-        lda spr_xy_pos,x          ; add offset to target sprite position
-        sec
-        sbc temp_w
-        sta spr_xy_pos,x
-        lda temp_w
-        clc
-        and #%11111000
-        bpl .5
-        sec
-        ora #%00000111
-.5      ror                     ; add offset to roughscroll
-        ror
-        ror
-.6      adc rough_scroll
-        sta rough_scroll
-        rts
 
 
 DoFinishLevel   subroutine
