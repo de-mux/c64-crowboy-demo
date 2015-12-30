@@ -14,6 +14,8 @@ SelectionArrow = 45     ; char # of selection arrow
 
 
 DoExitToMainMenu        subroutine
+        jsr MusicThemeInit
+
         ldx #<Int_MainMenu
         ldy #>Int_MainMenu
         lda #IRQ_MAIN_MENU_COMPARE
@@ -204,6 +206,8 @@ _MenuSelect:
 ; Registers used:       .A, .X, .Y
 ;
 _DoMenuLoop      subroutine
+        jsr MusicThemeIRQ
+
         jsr _MenuSelect
         dex
         bmi .1          ; X was 0(no selection)

@@ -37,7 +37,7 @@ R $6FF8-$6FFF	$   8       8 	Screen 2 Sprite Data Ptrs
   -- END VIC-II MEMORY AREA --
   $8000-$CFFF $5000  20,480   Code(was $A6D0)
   $D000-$DFFF	$1000   4,096	  RESERVED FOR C64 I/O
-  $E000-$FFF9	$1FFA   8,186	  ~UNUSED~ (music?)
+  $E000-$FFF9	$1FFA   8,186	  Music
 
 
 * : Can be written over once game starts

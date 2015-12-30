@@ -37,7 +37,7 @@ SpriteSequence = . - 83 ; (so SpriteSequence can be indexed starting at 83)
         ; Ping begin jump(103) -> jump(105)
         DC.B 105, 106   ; 103
         DC.B 105, 106   ; 105
-	
+
 
 ; Each pair of bytes in this array holds the X Offsets for the right-facing
 ;       and left-facing sprites of a single frame of animation.
@@ -62,4 +62,4 @@ SpriteOffset = . - 83
         ; Ping jumping
         ;DC.B 5,-5               ; 105
         DC.B 0,-0               ; 105
-	
+

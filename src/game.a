@@ -108,6 +108,7 @@ Int_ModeJump        subroutine
         beq .DoExitToMainMenu
         rts                     ; jumps to ModeExit if no mode...
 ModeExit:
+        jsr MusicSong1IRQ
         jmp IRQExit
 ; Jump Table
 .DoWorldUpdate    jmp DoWorldUpdate
@@ -122,6 +123,7 @@ ModeExit:
 
 DoNewGame       subroutine
         jsr InitGameGraphics
+        jsr MusicSong1Init
 
         set_level 1             ; start at Level 1
 

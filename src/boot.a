@@ -353,10 +353,19 @@ CODE_SEGMENT_2:
 
         ECHO "Writing Code Segment 2:    ",CODE_SEGMENT_2,"-",.-1," (",($D000 - .)," of ",$D000-CODE_SEGMENT_2,"bytes remaining. )"
         ECHO ""
-        ECHO ""
 
 ; ************* Music ***************
 ; $E000-$FFFF
         org $E000
-MusicInit:
-MusicPlay = .+3
+MUSIC_SEGMENT:
+MusicThemeInit:
+MusicThemeIRQ = .+3
+        incbin "theme-pal-e000.bin"
+        org $EA00
+MusicSong1Init:
+MusicSong1IRQ = .+3
+        incbin "song1-pal-ea00.bin"
+
+        ECHO "Writing music:             ",MUSIC_SEGMENT,"-",.-1," (",($FFFF - .)," bytes remaining)."
+        ECHO ""
+
