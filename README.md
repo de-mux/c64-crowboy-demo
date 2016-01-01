@@ -2,34 +2,54 @@ This is a demonstration of a side-scroller involving a character that can run an
 
 Currently, only PAL is supported. The game will still run in NTSC mode, but graphics and sound may not behave properly.
 
+
+Build
+-----
+
+This project requires a POSIX system, DASM and pucrunch(see Tools Used, below).
+
+From the `src` directory, type:
+
+	make
+
+If all goes well, you should end up with `crowboy.prg` which you can then run on an emulator.
+
+To clean up object files, type:
+
+	make clean
+
+
 Project Organization
 --------------------
 
-`boot.a` is the main assembly file and includes all other files.
+**Main**
 
-`logo.a` displays an animated C64 logo before the main menu.
-`menu.a` contains the main menu routine.
-`game.a` contains the game/level setup routines as well as the main game interrupt and joystick reading routines.
+* `boot.a` is the main assembly file and includes all other files.
+* `logo.a` displays an animated C64 logo before the main menu.
+* `menu.a` contains the main menu routine.
+* `game.a` contains the game/level setup routines as well as the main game interrupt and joystick reading routines.
 
-`objects.a` keeps track of objects(generally tied to sprites) in the game world. It also keeps track of state of each object. The `RequestAction` routine is used to request objects do things, including the player object.
-`sprite_info.a` contains data about sprite animation sequences and X offsets for each frame.
-`graphics.a` handles offscreen graphics buffers and copying the buffers and sprite positions/pointers to VICII memory.
+**Objects, sprites**
 
-`screen.a` mostly has routines for manipulating the VICII screen. Of interest are the routines for fading in and out a screen using an offscreen color buffer. See also `color_fade_table.a`.
-`text.a` contains routines for drawing text to the screen.
+* `objects.a` keeps track of objects(generally tied to sprites) in the game world. It also keeps track of state of each object. The `RequestAction` routine is used to request objects do things, including the player object.
+* `sprite_info.a` contains data about sprite animation sequences and X offsets for each frame.
+* `graphics.a` handles offscreen graphics buffers and copying the buffers and sprite positions/pointers to VICII memory.
 
-`irq.a` is the IRQ driver and contains the low-level interrupt routines as well as setting up the interrupt vectors.
+**Screen and text**
 
-`util.a` contains some basic low-level routines.
-`macros.a`, `constants.a` and `system.a` are pretty much how they sound. They do not contain any code.
+* `screen.a` mostly has routines for manipulating the VICII screen. Of interest are the routines for fading in and out a screen using an offscreen color buffer. See also `color_fade_table.a`.
+* `text.a` contains routines for drawing text to the screen.
+
+**IRQ**
+
+* `irq.a` is the IRQ driver and contains the low-level interrupt routines as well as setting up the interrupt vectors.
+
+**Utils, etc**
+
+* `util.a` contains some basic low-level routines.
+* `macros.a`, `constants.a` and `system.a` are pretty much how they sound. They do not contain any code.
 
 `loader.a` is currently not used, but was intended to allow more data to be loaded from a disk.
-
-
-Dependencies
-------------
-
-This project requires a POSIX system, DASM and pucrunch(see Tools Used, below).
 
 
 Sprites

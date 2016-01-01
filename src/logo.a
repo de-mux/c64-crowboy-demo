@@ -145,6 +145,8 @@ C64LOGO subroutine
         LDA .SPRC,X
         STA SPR0C,X
         JMP .L5
+        LDA #0          ;disable sprite multicolor
+        STA SPRMC
 
 .ROUT4  LDX #$45        ;pause
         JSR Wait
