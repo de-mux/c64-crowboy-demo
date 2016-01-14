@@ -11,7 +11,7 @@
 ; ******************* DATA *******************
 ;
 kSpriteGroundLevel = 164        ; y position of sprites on ground level
-kRunVelocity = 5                ; the x-velocity at which characters run
+kRunVelocity = 6                ; the x-velocity at which characters run
 kJumpVelocity = 6               ; the initial y-velocity at which characters jump
 ; prevent sprites from getting to close to either edge
 kSpriteMinXPos = 70
@@ -43,7 +43,7 @@ OBJ_INFO_FACING_LFT = %00000010
 ; See player states, above for the enumated states.
 ObjectPlayer:
         ;        run jump jkik jpnch kick pnch land stnd  die  hit
-        DC.B      85, 103, 105,  105, 105, 105,  83,  83,  83,  83
+        DC.B      85, 103, 105,  105, 107, 105,  83,  83,  83,  83
 
 
 ; ******************* CODE *******************
@@ -71,11 +71,6 @@ SetupPlayer     subroutine
         DC.B kSpriteGroundLevel-10 ; YPos = 164
         DC.W 160                ; XPos = 160
         DC.B 0                  ; Sprite 0
-
-        ;ldx #0
-        ;lda #ACT_RUN
-        ;ldy #OBJ_INFO_FACING_RT
-        ;jsr RequestAction
 
         ; get current action
         ldx #0
@@ -261,12 +256,9 @@ RequestAction   subroutine
         ; Action: run
 .run
         tay                     ; .Y = desired facing
-        lda .current_action
-        cmp #ACT_STAND          ;   if not standing or running, can't run(go exit)
-        beq .dorun
-        cmp #ACT_LAND
-        beq .dorun
-        cmp #ACT_RUN
+        ; can only jump if on solid ground
+        lda spr_xy_pos+1,x
+        cmp #kSpriteGroundLevel
         bne .exit
 .dorun:
         and #~OBJ_INFO_BIT_FACING
@@ -283,12 +275,10 @@ RequestAction   subroutine
         ; Action: jump
 .jump:
         lda .current_action
-        ; can only jump if standing or running
-        cmp #ACT_RUN
-        beq .dojump
-        cmp #ACT_STAND
-        beq .dojump
-        bne .exit               ; branch always
+        ; can only jump if on solid ground
+        lda spr_xy_pos+1,x
+        cmp #kSpriteGroundLevel
+        bne .exit
 .dojump:
         lda #(-kJumpVelocity)               ; set jump velocity
         sta obj_vel_y,x
@@ -307,6 +297,7 @@ RequestAction   subroutine
 .jump_kick:
 .jump_punch:
 .kick:
+        jmp .setAction
 .punch:
 .land:
         ; Action: land

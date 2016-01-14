@@ -3,8 +3,9 @@
 ;83		Ping Stand		83
 ;85		Ping begin run		87
 ;87-101		Ping run		87(Loop)
-;103            Ping begin jump         104
-;105            Ping jump               104
+;103            Ping begin jump         105
+;105            Ping jump               105
+;107            Ping kick               107
 
 
 ; The values in the tables below represent sprite indices.
@@ -37,6 +38,8 @@ SpriteSequence = . - 83 ; (so SpriteSequence can be indexed starting at 83)
         ; Ping begin jump(103) -> jump(105)
         DC.B 105, 106   ; 103
         DC.B 105, 106   ; 105
+        ; kick
+        DC.B 107, 108   ; 107
 
 
 ; Each pair of bytes in this array holds the X Offsets for the right-facing
@@ -62,4 +65,5 @@ SpriteOffset = . - 83
         ; Ping jumping
         ;DC.B 5,-5               ; 105
         DC.B 0,-0               ; 105
-
+        ; Kicking
+        DC.B 0,-0               ; 107

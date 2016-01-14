@@ -115,6 +115,8 @@ reset_flag      DC.B 0  ; whether or not game has been reset
 mode            DC.B 0  ; mode of game (see game.a)
 NextLevel       DC.W 0  ; ptr to the next level
 jump_latch      DC.B 0  ; player must release jump button before allowed to jump again
+attack_latch    DC.B 0  ; player must release attack button before allowed to attach again
+attack_countdown DC.B 0 ; countdown until attack is done
 
 ; Music
 MusicZP         DC.B 0,0,0,0,0,0        ; used by music routine ($FA-$FF)
