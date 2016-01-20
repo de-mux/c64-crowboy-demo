@@ -1,4 +1,7 @@
-This is a demonstration of a side-scroller involving a character that can run and jump around. It was started a while back as a college project, but was eventually abandoned. I decided to put the source online after fixing some bugs and other issues, in case anybody finds it useful. The code is not the cleanest ever, but can be freely used as a basis for other projects. If you do decide to use any of the code, please share a link. Bug fixes/improvements are also welcome.
+[![Crowboy video on YouTube](http://img.youtube.com/vi/BveeejVGICs/0.jpg)(video)](http://www.youtube.com/watch?v=BveeejVGICs)
+
+
+![image](doc/c64logo.png) This is a demonstration of a side-scroller involving a character that can run and jump around. It was started a while back as a college project, but was eventually abandoned. I decided to put the source online after fixing some bugs and other issues, in case anybody finds it useful. The code is not the cleanest ever, but can be freely used as a basis for other projects. If you do decide to use any of the code, please share a link. Bug fixes/improvements are also welcome.
 
 Currently, only PAL is supported. The game will still run in NTSC mode, but graphics and sound may not behave properly.
 
@@ -83,3 +86,11 @@ Tools Used
 * [VoiceTracker](http://csdb.dk/release/?id=2665) 4.2 - music tracker
 * [pucrunch](https://github.com/mist64/pucrunch) - byte cruncher
 
+Screenshots
+-----------
+
+![image](doc/screenshot-title.png)
+
+![image](doc/screenshot-game1.png)
+
+![image](doc/screenshot-game2.png)
