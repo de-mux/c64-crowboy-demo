@@ -14,7 +14,7 @@ ASM_DIR=~/bin
 CRUNCHER=pucrunch
 CRUNCH_DIR=~/bin
 CRUNCH_OPTS=-c64
-PRG_FILE=$(PROJECT_DIR)/$(PROJECT_NAME).prg
+PRG_FILE=$(PROJECT_DIR)/../$(PROJECT_NAME).prg
 OBJ_FILE=$(PROJECT_DIR)/$(PROJECT_NAME).o
 LST_FILE=$(PROJECT_DIR)/$(PROJECT_NAME).lst
 INC_DIR=-I$(PROJECT_DIR)/../sprites -I$(PROJECT_DIR)/../char -I$(PROJECT_DIR)/../music -I$(PROJECT_DIR)/../levels
@@ -23,7 +23,7 @@ DASM_OPTIONS=-v0 -E2 -l$(PROJECT_NAME).lst $(INC_DIR)
 # -----------------------------------------------------------------------------
 # Define the final dependecy;
 # -----------------------------------------------------------------------------
-all : $(PROJECT_DIR)/$(PROJECT_NAME).prg
+all : $(PRG_FILE)
 	@echo Done
 
 # -----------------------------------------------------------------------------

@@ -332,7 +332,8 @@ PlayerHandleJoystick    subroutine
         lda #ACT_RUN            ; if X = 1, run right
         ldy #OBJ_INFO_FACING_RT
         jmp .req_act
-.2:     lda #ACT_STAND          ; otherwise, attempt to stand
+.2:     ldy #OBJ_FACING_NO_CHANGE
+        lda #ACT_STAND          ; otherwise, attempt to stand
 .req_act:
         ldx #0
         jsr RequestAction
@@ -343,6 +344,7 @@ PlayerHandleJoystick    subroutine
         beq .5
         ldx #0                  ; jump
         stx jump_latch          ; to prevent user from holding down jump
+        ldy #OBJ_FACING_NO_CHANGE
         lda #ACT_JUMP
         jsr RequestAction
         jmp .5
@@ -356,6 +358,8 @@ PlayerHandleJoystick    subroutine
         beq .7
         dec attack_countdown
         lda #ACT_KICK
+        ldx #0
+        ldy #OBJ_FACING_NO_CHANGE
         jsr RequestAction
         jmp .7
 .6:     ; attack not pressed, reset attack latch

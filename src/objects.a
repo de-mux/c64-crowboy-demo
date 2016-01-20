@@ -12,6 +12,7 @@
 ;
 kSpriteGroundLevel = 164        ; y position of sprites on ground level
 kRunVelocity = 6                ; the x-velocity at which characters run
+kKickVelocity = 1               ; initial x-velocity of a kick
 kJumpVelocity = 6               ; the initial y-velocity at which characters jump
 ; prevent sprites from getting to close to either edge
 kSpriteMinXPos = 70
@@ -36,6 +37,8 @@ OBJ_INFO_BIT_NEWACTION = %00000100
 ;facings
 OBJ_INFO_FACING_RT =  %00000000
 OBJ_INFO_FACING_LFT = %00000010
+;special value used for RequestAction routine
+OBJ_FACING_NO_CHANGE = %11111111
 
 
 ; ******* Object Definitions ********
@@ -198,8 +201,9 @@ GenerateObject  subroutine
 ;                       (for actions, see "Actions," above)
 ; Arguments:
 ;       .X      the object to request (0-7)
-;       .A      the desired action (run, stand, attack, jump, etc)
-;       .Y      the desired facing (left or right)
+;       .A      the desired action (see ACT_... constants)
+;       .Y      the desired facing (OBJ_INFO_FACING_RT, OBJ_INFO_FACING_LFT,
+;                                       or OBJ_FACING_NO_CHANGE)
 ;
 RequestAction   subroutine
 .desired_action = temp_w
@@ -207,16 +211,31 @@ RequestAction   subroutine
 .cur_facing = temp_w3
         ; if new action is requested, or facing different direction, update action
         sta .desired_action
+        lda obj_info,x
+        and #OBJ_INFO_BIT_FACING
+        sta .cur_facing
+        ; new action?
         lda obj_current_action,x
         sta .current_action
         cmp .desired_action
         bne .newact
-        ; facing different?
-        lda obj_info,x
-        and #OBJ_INFO_BIT_FACING
-        sta .cur_facing
+        ; if facing different, reset velocity, set action to stand
+        cpy #OBJ_FACING_NO_CHANGE
+        beq .f1
         cpy .cur_facing
-        bne .newact
+        beq .f1
+        lda #0
+        sta obj_vel_x,x
+        lda #ACT_STAND
+        sta .desired_action
+        jmp .newact
+.f1:
+        ; stand or run?
+        lda .desired_action
+        cmp #ACT_STAND
+        beq .newact
+        cmp #ACT_RUN
+        beq .newact
         jmp .exit
 
 .newact tya                     ; .A = facing
@@ -254,27 +273,49 @@ RequestAction   subroutine
 .9      jmp .hit
 
         ; Action: run
-.run
+.run:
         tay                     ; .Y = desired facing
-        ; can only jump if on solid ground
+        ; can only run if on solid ground
         lda spr_xy_pos+1,x
         cmp #kSpriteGroundLevel
-        bne .exit
+        beq .dorun
+        jmp .exit
 .dorun:
+        ; set to new facing
+        lda obj_info,x
         and #~OBJ_INFO_BIT_FACING
         sty .cur_facing
         ora .cur_facing
         sta obj_info,x
-        lda #kRunVelocity       ; set velocity
-        cpy #OBJ_INFO_FACING_RT ;  positive if facing right
+        ; increase velocity depending on facing direction
+        lda obj_vel_x,x
+        ;  positive if facing right
+        cpy #OBJ_INFO_FACING_RT
         beq .rt
-        lda #(-kRunVelocity)    ;  negative if facing left
-.rt     sta obj_vel_x,x
+        ; negative if facing left
+        sec
+        sbc #(-kRunVelocity+1)
+        bvc .run1
+        eor #$80
+.run1   bmi .run2
+        dec obj_vel_x,x
+        jmp .run2
+.rt:
+        cmp #kRunVelocity
+        bcs .run2
+        inc obj_vel_x,x
+.run2:
+        ; don't reset action if already performing action
+        lda .current_action
+        cmp .desired_action
+        beq .exit
+        ; if not already running, reset x velocity
+        lda #0
+        sta obj_vel_x,x
         jmp .setAction
 
         ; Action: jump
 .jump:
-        lda .current_action
         ; can only jump if on solid ground
         lda spr_xy_pos+1,x
         cmp #kSpriteGroundLevel
@@ -289,15 +330,31 @@ RequestAction   subroutine
         lda spr_xy_pos+1,x
         cmp #kSpriteGroundLevel
         bne .exit
-        lda #0
-        sta obj_vel_x,x
+        ; slow down velocity
+        lda obj_vel_x,x
+        bpl .pos_vel
+        inc obj_vel_x,x         ; negative velocity
+        jmp .setAction
+.pos_vel:
+        beq .s1                 ; already not moving, don't update velocity
+        dec obj_vel_x,x         ; positive velocity
+.s1:
         jmp .setAction
 
         ; TODO: actions not yet implemented
 .jump_kick:
 .jump_punch:
 .kick:
-        jmp .setAction
+        ldy .cur_facing
+
+        lda obj_vel_x,x         ; if not already moving, propel the kick a little
+        bne .ka
+        lda #kKickVelocity      ; set velocity
+        cpy #OBJ_INFO_FACING_RT ;  positive if facing right
+        beq .krt
+        lda #(-kKickVelocity)   ;  negative if facing left
+.krt    sta obj_vel_x,x
+.ka     jmp .setAction
 .punch:
 .land:
         ; Action: land
